@@ -1,10 +1,10 @@
 {
-  "name": "harborclient-server",
+  "name": "service-hub",
   "version": "0.1.0",
-  "description": "Central server for HarborClient",
+  "description": "Service Hub — central server for HarborClient",
   "type": "module",
   "bin": {
-    "harborclient-server": "./dist/cli.js"
+    "service-hub": "./dist/cli.js"
   },
   "imports": {
     "#/*": "./src/*"

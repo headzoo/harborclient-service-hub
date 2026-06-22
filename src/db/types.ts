@@ -4,7 +4,7 @@
 export type UserRole = 'admin' | 'user';
 
 /**
- * Stored metadata for a HarborClient server user account.
+ * Stored metadata for a Service Hub user account.
  */
 export interface UserRecord {
   /**

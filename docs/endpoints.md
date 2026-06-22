@@ -1,6 +1,6 @@
 # API Endpoints
 
-HarborClient Server exposes a JSON HTTP API for shared collections, environments, folders, and saved requests. All routes except `GET /health` require a valid bearer token — see [Authentication](./auth.md).
+Service Hub exposes a JSON HTTP API for shared collections, environments, folders, and saved requests. All routes except `GET /health` require a valid bearer token — see [Authentication](./auth.md).
 
 ## Overview
 

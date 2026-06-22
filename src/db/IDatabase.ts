@@ -14,7 +14,7 @@ import type {
 import type { ApiTokenRecord } from '#/db/types.js';
 
 /**
- * Common contract for HarborClient server database backends.
+ * Common contract for Service Hub database backends.
  */
 export interface IDatabase {
   /**

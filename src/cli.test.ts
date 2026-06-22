@@ -147,7 +147,7 @@ function createTestProgram(options: Parameters<typeof createProgram>[1] = {}) {
  * @returns Absolute path to the written config file.
  */
 function writeConfig(contents: string): string {
-  const dir = mkdtempSync(path.join(tmpdir(), 'harborclient-server-cli-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'service-hub-cli-'));
   const configPath = path.join(dir, 'server.yaml');
   writeFileSync(configPath, contents, 'utf8');
   return configPath;
@@ -188,7 +188,7 @@ describe('createProgram', () => {
     );
 
     const output = write.mock.calls.map((call) => String(call[0])).join('');
-    expect(output).toContain('harborclient-server');
+    expect(output).toContain('service-hub');
     expect(output).toContain('start');
     expect(output).toContain('migrate');
     expect(output).toContain('user');
@@ -349,7 +349,7 @@ describe('runServer', () => {
     expect(db.connect).toHaveBeenCalledOnce();
     expect(throttleStore.connect).toHaveBeenCalledOnce();
     expect(app.listen).toHaveBeenCalledWith({ host: '127.0.0.1', port: 8787 });
-    expect(log).toHaveBeenCalledWith('HarborClient server listening on http://127.0.0.1:8787');
+    expect(log).toHaveBeenCalledWith('Service Hub listening on http://127.0.0.1:8787');
 
     log.mockRestore();
   });

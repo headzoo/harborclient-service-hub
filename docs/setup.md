@@ -2,7 +2,7 @@
 
 ```bash
 pnpm install
-harborclient-server migrate
+service-hub migrate
 ```
 
 See [Authentication](./auth.md) for creating and managing API bearer tokens.

@@ -90,11 +90,11 @@ export function parseDataDir(value: string): string {
 }
 
 /**
- * Returns the default HarborClient server data directory path.
+ * Returns the default Service Hub data directory path.
  *
- * @returns Validated path to `~/.harborclient-server`.
+ * @returns Validated path to `~/.service-hub`.
  * @throws {InvalidArgumentError} When the default path cannot be used.
  */
 export function defaultDataDir(): string {
-  return parseDataDir('~/.harborclient-server');
+  return parseDataDir('~/.service-hub');
 }

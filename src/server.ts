@@ -101,7 +101,7 @@ function registerGracefulShutdown(
 }
 
 /**
- * Creates, listens on, and runs the HarborClient HTTP server until shutdown.
+ * Creates, listens on, and runs the Service Hub HTTP server until shutdown.
  *
  * @param config - Validated host and port from the config file.
  * @param options - Runtime options such as verbose logging and the database instance.
@@ -133,7 +133,7 @@ export async function runServer(
     console.log('Starting server with config:', config);
   }
 
-  console.log(`HarborClient server listening on ${formatListenAddress(host, port)}`);
+  console.log(`Service Hub listening on ${formatListenAddress(host, port)}`);
 
   registerGracefulShutdown(app, options.db, options.throttleStore);
 
@@ -164,7 +164,7 @@ export function registerStartCommand(
 ): void {
   program
     .command('start')
-    .description('Start the HarborClient server')
+    .description('Start the Service Hub server')
     .action(
       /**
        * Runs the start subcommand after merging global CLI options.

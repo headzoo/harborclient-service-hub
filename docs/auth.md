@@ -1,13 +1,13 @@
 # Authentication
 
-HarborClient Server protects API routes with database-backed bearer tokens tied to user accounts. HarborClient desktop clients authenticate with `user`-role tokens for shared data; operators authenticate with `admin`-role tokens for account management via the REST API (management endpoints are planned). The CLI remains available for user and token administration today.
+Service Hub protects API routes with database-backed bearer tokens tied to user accounts. HarborClient desktop clients authenticate with `user`-role tokens for shared data; operators authenticate with `admin`-role tokens for account management via the REST API (management endpoints are planned). The CLI remains available for user and token administration today.
 
 ## Prerequisites
 
 Configure your database in `server.yaml`, then apply schema migrations:
 
 ```bash
-harborclient-server migrate
+service-hub migrate
 ```
 
 For Postgres and MySQL this creates the `users` and `api_tokens` tables (plus entity tables). Firestore uses schemaless `users` and `apiTokens` collections.
@@ -136,20 +136,20 @@ Use the command line to create and manage users.
 
 ```bash
 # Create an operator account (admin role, for management API tokens)
-harborclient-server user create --name ops --role admin
+service-hub user create --name ops --role admin
 
 # Create a user with full access
-harborclient-server user create --name alice --role user \
+service-hub user create --name alice --role user \
   --collection-access '*' --environment-access '*'
 
 # Create a user with access to specific collections/environments
-harborclient-server user create --name bob --role user \
+service-hub user create --name bob --role user \
   --collection-access <collection-id> --environment-access <environment-id>
 
-harborclient-server user list
-harborclient-server user show <user-id>
-harborclient-server user update <user-id> --role user --collection-access '*'
-harborclient-server user delete <user-id>
+service-hub user list
+service-hub user show <user-id>
+service-hub user update <user-id> --role user --collection-access '*'
+service-hub user delete <user-id>
 ```
 
 ## Manage tokens
@@ -157,10 +157,10 @@ harborclient-server user delete <user-id>
 Tokens always belong to a user. Issue `user`-role tokens for HarborClient desktop clients and `admin`-role tokens for operator REST clients. Entity routes require a `user`-role token; management routes will require an `admin`-role token.
 
 ```bash
-harborclient-server user token create --user <user-id> --name "Alice laptop"
-harborclient-server user token list
-harborclient-server user token list --user <user-id>
-harborclient-server user token revoke <token-id>
+service-hub user token create --user <user-id> --name "Alice laptop"
+service-hub user token list
+service-hub user token list --user <user-id>
+service-hub user token revoke <token-id>
 ```
 
 The `user token create` command prints a one-time secret prefixed with `hbk_`. Store it immediately — the server only persists a sha256 hash.

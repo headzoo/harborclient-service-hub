@@ -11,7 +11,7 @@
   display: inline-block;
 }
 
-.vp-doc img[alt='HarborClient Server'] {
+.vp-doc img[alt='Service Hub'] {
   display: block;
   max-width: min(420px, 100%);
   height: auto;
