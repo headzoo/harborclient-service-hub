@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDatabase } from '#/db/CreateDatabase.js';
+import { createDatabase } from '#/db/createDatabase.js';
 import { FirestoreDatabase } from '#/db/FirestoreDatabase.js';
 import { MysqlDatabase } from '#/db/MysqlDatabase.js';
 import { PostgresDatabase } from '#/db/PostgresDatabase.js';

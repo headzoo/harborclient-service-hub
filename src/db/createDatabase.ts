@@ -1,4 +1,4 @@
-import type { IDatabase } from '#/db/Database.js';
+import type { IDatabase } from '#/db/IDatabase.js';
 import { FirestoreDatabase } from '#/db/FirestoreDatabase.js';
 import { MysqlDatabase } from '#/db/MysqlDatabase.js';
 import { PostgresDatabase } from '#/db/PostgresDatabase.js';

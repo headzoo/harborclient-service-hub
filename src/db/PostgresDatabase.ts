@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { z } from 'zod/v4';
-import type { IDatabase } from '#/db/Database.js';
-import { formatZodError } from '#/db/Validation.js';
+import type { IDatabase } from '#/db/IDatabase.js';
+import { formatZodError } from '#/db/validation.js';
 
 const { Pool } = pg;
 
