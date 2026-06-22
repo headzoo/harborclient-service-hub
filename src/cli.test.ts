@@ -61,6 +61,9 @@ function createMockDatabase(): IDatabase {
     role: 'user',
     collectionAccess: ['*'],
     environmentAccess: ['*'],
+    llmAccess: false,
+    llmModels: [],
+    llmMonthlyTokenLimit: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     createdByUserId: 'system-user-id',
@@ -72,6 +75,9 @@ function createMockDatabase(): IDatabase {
     role: 'user',
     collectionAccess: ['*'],
     environmentAccess: ['*'],
+    llmAccess: false,
+    llmModels: [],
+    llmMonthlyTokenLimit: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     createdByUserId: 'system-user-id',
@@ -84,6 +90,9 @@ function createMockDatabase(): IDatabase {
     role: 'user',
     collectionAccess: ['*'],
     environmentAccess: ['*'],
+    llmAccess: false,
+    llmModels: [],
+    llmMonthlyTokenLimit: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     createdByUserId: 'system-user-id',
@@ -275,7 +284,8 @@ ${sampleDbSection}${sampleRedisSection}`);
         password: 'harbor',
         database: 'harbor'
       },
-      redis: sampleRedisConfig
+      redis: sampleRedisConfig,
+      llm: null
     });
     expect(createServerMock).toHaveBeenCalledWith(
       {
@@ -289,7 +299,8 @@ ${sampleDbSection}${sampleRedisSection}`);
           password: 'harbor',
           database: 'harbor'
         },
-        redis: sampleRedisConfig
+        redis: sampleRedisConfig,
+        llm: null
       },
       { verbose: true, db, throttleStore }
     );
@@ -304,7 +315,8 @@ ${sampleDbSection}${sampleRedisSection}`);
         password: 'harbor',
         database: 'harbor'
       },
-      redis: sampleRedisConfig
+      redis: sampleRedisConfig,
+      llm: null
     });
 
     log.mockRestore();
@@ -335,7 +347,8 @@ describe('runServer', () => {
           password: 'harbor',
           database: 'harbor'
         },
-        redis: sampleRedisConfig
+        redis: sampleRedisConfig,
+        llm: null
       },
       { db, throttleStore }
     );
@@ -352,7 +365,8 @@ describe('runServer', () => {
           password: 'harbor',
           database: 'harbor'
         },
-        redis: sampleRedisConfig
+        redis: sampleRedisConfig,
+        llm: null
       },
       { verbose: undefined, db, throttleStore }
     );
@@ -415,6 +429,9 @@ ${sampleDbSection}${sampleRedisSection}`);
         role: 'user',
         collectionAccess: ['*'],
         environmentAccess: ['*'],
+        llmAccess: false,
+        llmModels: [],
+        llmMonthlyTokenLimit: null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         createdByUserId: null,
@@ -513,6 +530,9 @@ ${sampleDbSection}${sampleRedisSection}`);
         role: 'user',
         collectionAccess: ['*'],
         environmentAccess: ['*'],
+        llmAccess: false,
+        llmModels: [],
+        llmMonthlyTokenLimit: null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         createdByUserId: null,

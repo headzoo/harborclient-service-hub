@@ -47,6 +47,8 @@ export function createStubDatabase(): Mocked<IDatabase> {
     deleteFolder: vi.fn(),
     reorderFolders: vi.fn(),
     reorderRequests: vi.fn(),
-    moveRequest: vi.fn()
+    moveRequest: vi.fn(),
+    getLlmUsage: vi.fn(),
+    addLlmUsage: vi.fn()
   };
 }

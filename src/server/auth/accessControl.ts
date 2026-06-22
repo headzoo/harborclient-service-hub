@@ -134,3 +134,46 @@ export function filterAccessibleEnvironments(
   const allowed = new Set(user.environmentAccess);
   return environments.filter((environment) => allowed.has(environment.id));
 }
+
+/**
+ * Returns true when the user may call hub-proxied LLM routes.
+ *
+ * @param user - Authenticated user attached to the request.
+ * @returns True when LLM access is enabled for the account.
+ */
+export function canUseLlm(user: UserRecord): boolean {
+  return user.llmAccess;
+}
+
+/**
+ * Returns true when the user may request a specific hub-offered model.
+ *
+ * @param user - Authenticated user attached to the request.
+ * @param modelId - Provider-specific model id.
+ * @returns True when the user's model access list permits the model.
+ */
+export function isLlmModelAllowed(user: UserRecord, modelId: string): boolean {
+  if (!user.llmAccess) {
+    return false;
+  }
+
+  if (hasWildcardAccess(user.llmModels)) {
+    return true;
+  }
+
+  return user.llmModels.includes(modelId);
+}
+
+/**
+ * Returns true when usage has reached or exceeded the configured monthly limit.
+ *
+ * @param totalTokens - Tokens consumed in the current period.
+ * @param limit - Configured monthly limit, or null for unlimited.
+ */
+export function isOverMonthlyLimit(totalTokens: number, limit: number | null): boolean {
+  if (limit == null) {
+    return false;
+  }
+
+  return totalTokens >= limit;
+}

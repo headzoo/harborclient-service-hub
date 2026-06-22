@@ -7,6 +7,9 @@ import {
   canCreateEnvironment,
   canUseDataApi,
   isAdmin,
+  canUseLlm,
+  isLlmModelAllowed,
+  isOverMonthlyLimit,
   filterAccessibleCollections,
   filterAccessibleEnvironments,
   hasWildcardAccess
@@ -18,6 +21,9 @@ const baseUser: UserRecord = {
   role: 'user',
   collectionAccess: ['collection-a'],
   environmentAccess: ['env-a'],
+  llmAccess: false,
+  llmModels: [],
+  llmMonthlyTokenLimit: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   createdByUserId: null,
@@ -132,5 +138,25 @@ describe('accessControl', () => {
     expect(filterAccessibleEnvironments(baseUser, sampleEnvironments)).toEqual([
       sampleEnvironments[0]
     ]);
+  });
+
+  it('evaluates LLM access and model permissions', () => {
+    const llmUser: UserRecord = {
+      ...baseUser,
+      llmAccess: true,
+      llmModels: ['gpt-4o']
+    };
+
+    expect(canUseLlm(baseUser)).toBe(false);
+    expect(canUseLlm(llmUser)).toBe(true);
+    expect(isLlmModelAllowed(llmUser, 'gpt-4o')).toBe(true);
+    expect(isLlmModelAllowed(llmUser, 'gpt-4o-mini')).toBe(false);
+    expect(isLlmModelAllowed({ ...llmUser, llmModels: ['*'] }, 'gpt-4o-mini')).toBe(true);
+  });
+
+  it('detects monthly token limit exhaustion', () => {
+    expect(isOverMonthlyLimit(999, 1000)).toBe(false);
+    expect(isOverMonthlyLimit(1000, 1000)).toBe(true);
+    expect(isOverMonthlyLimit(1000, null)).toBe(false);
   });
 });

@@ -49,12 +49,12 @@ function readPackageVersion(): string {
  *
  * Does not call `listen`; use {@link runServer} or test inject for that.
  *
- * @param _config - Server bind settings (reserved for future route/plugin use).
+ * @param config - Server bind settings and optional LLM configuration.
  * @param options - Logger, version, and database overrides.
  * @returns Fastify app with type provider and routes attached.
  */
 export async function createServer(
-  _config: ServerConfig,
+  config: ServerConfig,
   options: CreateServerOptions
 ): Promise<FastifyInstance> {
   const app = Fastify({
@@ -67,7 +67,8 @@ export async function createServer(
   await registerRoutes(app, {
     version: options.version ?? readPackageVersion(),
     db: options.db,
-    throttleStore: options.throttleStore
+    throttleStore: options.throttleStore,
+    llm: config.llm
   });
 
   return app;

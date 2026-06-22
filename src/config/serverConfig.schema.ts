@@ -77,15 +77,46 @@ export const redisSectionSchema = z
   .loose();
 
 /**
+ * Zod schema for a single LLM provider API key entry in server.yaml.
+ */
+export const llmProviderEntrySchema = z.object({
+  apiKey: z.string().trim().min(1, { message: 'LLM provider apiKey must not be empty.' })
+});
+
+/**
+ * Zod schema for the optional `llm` section of the config file.
+ */
+export const llmSectionSchema = z.object({
+  providers: z
+    .object({
+      openai: llmProviderEntrySchema.optional(),
+      claude: llmProviderEntrySchema.optional(),
+      gemini: llmProviderEntrySchema.optional()
+    })
+    .refine(
+      (providers) =>
+        Boolean(providers.openai?.apiKey || providers.claude?.apiKey || providers.gemini?.apiKey),
+      { message: 'llm.providers must include at least one provider with an apiKey.' }
+    ),
+  models: z.array(z.string().trim().min(1)).optional()
+});
+
+/**
  * Zod schema for the full server config document (`server.yaml` root mapping).
  */
 export const serverConfigDocumentSchema = z.object({
   server: serverSectionSchema,
   db: dbSectionSchema,
-  redis: redisSectionSchema
+  redis: redisSectionSchema,
+  llm: llmSectionSchema.optional()
 });
 
 /**
  * Validated shape of a parsed server config YAML file.
  */
 export type ServerConfigDocument = z.infer<typeof serverConfigDocumentSchema>;
+
+/**
+ * Validated shape of the optional llm section.
+ */
+export type LlmSection = z.infer<typeof llmSectionSchema>;

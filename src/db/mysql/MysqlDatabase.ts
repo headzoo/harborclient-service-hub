@@ -36,6 +36,11 @@ import {
   USER_SELECT_COLUMNS,
   type UserSqlRow
 } from '#/db/userRows.js';
+import {
+  LLM_USAGE_SELECT_COLUMNS,
+  mapLlmUsageSqlRow,
+  type LlmUsageSqlRow
+} from '#/db/llmUsageRows.js';
 import type {
   ApiTokenRecord,
   AuditAction,
@@ -48,6 +53,7 @@ import type {
   FolderRecord,
   KeyValue,
   ListAuditLogOptions,
+  LlmUsageRecord,
   SaveRequestInput,
   SavedRequestRecord,
   UpdateUserInput,
@@ -63,6 +69,7 @@ const API_TOKEN_SELECT = `SELECT ${API_TOKEN_SELECT_COLUMNS} FROM api_tokens`;
 const FOLDER_SELECT = `SELECT ${FOLDER_SELECT_COLUMNS} FROM folders`;
 const REQUEST_SELECT = `SELECT ${REQUEST_SELECT_COLUMNS} FROM requests`;
 const AUDIT_LOG_SELECT = `SELECT ${AUDIT_LOG_SELECT_COLUMNS} FROM audit_log`;
+const LLM_USAGE_SELECT = `SELECT ${LLM_USAGE_SELECT_COLUMNS} FROM llm_usage`;
 
 /**
  * MySQL-backed database implementation.
@@ -83,7 +90,7 @@ export class MysqlDatabase implements IDatabase {
    *
    * @param config - Parsed MySQL connection settings.
    */
-  constructor(private readonly config: MysqlDatabaseConfig) {}
+  constructor(private readonly config: MysqlDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link MysqlDatabase}.
@@ -214,17 +221,23 @@ export class MysqlDatabase implements IDatabase {
         role,
         collection_access,
         environment_access,
+        llm_access,
+        llm_models,
+        llm_monthly_token_limit,
         created_at,
         updated_at,
         created_by_user_id,
         updated_by_user_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         trimmedName,
         input.role,
         serializeAccessList(input.collectionAccess),
         serializeAccessList(input.environmentAccess),
+        input.llmAccess ? 1 : 0,
+        serializeAccessList(input.llmModels ?? []),
+        input.llmMonthlyTokenLimit ?? null,
         now,
         now,
         attributionUserId,
@@ -298,6 +311,12 @@ export class MysqlDatabase implements IDatabase {
     const role = input.role ?? existing.role;
     const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
     const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const llmAccess = input.llmAccess ?? existing.llmAccess;
+    const llmModels = input.llmModels ?? existing.llmModels;
+    const llmMonthlyTokenLimit =
+      input.llmMonthlyTokenLimit !== undefined
+        ? input.llmMonthlyTokenLimit
+        : existing.llmMonthlyTokenLimit;
     const updatedAt = new Date();
 
     const result = await this.executeStatement(
@@ -306,6 +325,9 @@ export class MysqlDatabase implements IDatabase {
         role = ?,
         collection_access = ?,
         environment_access = ?,
+        llm_access = ?,
+        llm_models = ?,
+        llm_monthly_token_limit = ?,
         updated_at = ?,
         updated_by_user_id = ?
       WHERE id = ?`,
@@ -314,6 +336,9 @@ export class MysqlDatabase implements IDatabase {
         role,
         serializeAccessList(collectionAccess),
         serializeAccessList(environmentAccess),
+        llmAccess ? 1 : 0,
+        serializeAccessList(llmModels),
+        llmMonthlyTokenLimit,
         updatedAt,
         actingUserId,
         id
@@ -1251,6 +1276,65 @@ export class MysqlDatabase implements IDatabase {
   }
 
   /**
+   * Returns monthly LLM usage for a user, or null when no usage has been recorded.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   */
+  async getLlmUsage(userId: string, period: string): Promise<LlmUsageRecord | null> {
+    const [rows] = await this.requirePool().execute<(LlmUsageSqlRow & RowDataPacket)[]>(
+      `${LLM_USAGE_SELECT} WHERE user_id = ? AND period = ? LIMIT 1`,
+      [userId, period]
+    );
+    const row = rows[0];
+    return row ? mapLlmUsageSqlRow(row) : null;
+  }
+
+  /**
+   * Atomically increments monthly LLM token usage for a user.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   * @param promptTokens - Prompt tokens to add.
+   * @param completionTokens - Completion tokens to add.
+   */
+  async addLlmUsage(
+    userId: string,
+    period: string,
+    promptTokens: number,
+    completionTokens: number
+  ): Promise<LlmUsageRecord> {
+    const totalDelta = promptTokens + completionTokens;
+    const now = new Date();
+    const id = randomUUID();
+
+    await this.executeStatement(
+      `INSERT INTO llm_usage (
+        id,
+        user_id,
+        period,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        prompt_tokens = prompt_tokens + VALUES(prompt_tokens),
+        completion_tokens = completion_tokens + VALUES(completion_tokens),
+        total_tokens = total_tokens + VALUES(total_tokens),
+        updated_at = VALUES(updated_at)`,
+      [id, userId, period, promptTokens, completionTokens, totalDelta, now]
+    );
+
+    const usage = await this.getLlmUsage(userId, period);
+    if (!usage) {
+      throw new Error('LLM usage not found after upsert');
+    }
+
+    return usage;
+  }
+
+  /**
    * Ensures the internal system user exists and caches its identifier.
    */
   private async ensureSystemUser(): Promise<void> {
@@ -1272,17 +1356,23 @@ export class MysqlDatabase implements IDatabase {
         role,
         collection_access,
         environment_access,
+        llm_access,
+        llm_models,
+        llm_monthly_token_limit,
         created_at,
         updated_at,
         created_by_user_id,
         updated_by_user_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         trimmedName,
         input.role,
         serializeAccessList(input.collectionAccess),
         serializeAccessList(input.environmentAccess),
+        0,
+        serializeAccessList([]),
+        null,
         now,
         now,
         id,

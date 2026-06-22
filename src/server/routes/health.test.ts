@@ -28,7 +28,8 @@ describe('GET /health', () => {
         host: '127.0.0.1',
         port: 8787,
         db: { driver: 'postgres' },
-        redis: { host: '127.0.0.1', port: 6380 }
+        redis: { host: '127.0.0.1', port: 6380 },
+        llm: null
       },
       { version: '0.1.0', db: createHealthStubDatabase(), throttleStore: createStubThrottleStore() }
     );

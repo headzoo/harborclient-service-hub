@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { LlmConfig } from '#/config/llmConfig.js';
 import type { IDatabase } from '#/db/IDatabase.js';
 import type { IThrottleStore } from '#/server/auth/throttle/IThrottleStore.js';
 import { registerCollectionRoutes } from '#/server/routes/collections.js';
@@ -6,6 +7,7 @@ import { registerEnvironmentRoutes } from '#/server/routes/environments.js';
 import { registerFolderRoutes } from '#/server/routes/folders.js';
 import { registerHealthRoute } from '#/server/routes/health.js';
 import { registerRequestRoutes } from '#/server/routes/requests.js';
+import { registerLlmRoutes } from '#/server/routes/llm.js';
 import {
   createBearerAuthHook,
   registerBearerAuthDecorator
@@ -26,6 +28,11 @@ export interface RegisterRoutesOptions {
    * Redis-backed store for authentication throttling on protected routes.
    */
   throttleStore: IThrottleStore;
+
+  /**
+   * Normalized LLM configuration from server.yaml, or null when unset.
+   */
+  llm: LlmConfig | null;
 }
 
 /**
@@ -58,6 +65,7 @@ export async function registerProtectedRoutes(
   await registerEnvironmentRoutes(app, options.db);
   await registerFolderRoutes(app, options.db);
   await registerRequestRoutes(app, options.db);
+  await registerLlmRoutes(app, { db: options.db, llm: options.llm });
 }
 
 /**

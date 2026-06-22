@@ -1,3 +1,74 @@
+# Team Hub server configuration.
+# Copy to server.yaml and adjust for your environment.
+#
+# Required sections: server, db, redis
+# Optional section: llm (hub-proxied LLM access for HarborClient)
+
+# HTTP listen address for the Team Hub API.
 server:
   port: 8787
   host: 127.0.0.1
+
+# Database backend. Set driver to postgres, mysql, or firestore.
+#
+# Postgres (default for local development with docker compose):
+db:
+  driver: postgres
+  host: 127.0.0.1
+  port: 5432
+  user: harbor
+  password: harbor
+  database: harbor
+
+# MySQL alternative:
+# db:
+#   driver: mysql
+#   host: 127.0.0.1
+#   port: 3306
+#   user: harbor
+#   password: harbor
+#   database: harbor
+
+# Firestore alternative:
+# db:
+#   driver: firestore
+#   projectId: my-gcp-project
+#   keyFilename: /path/to/service-account.json
+
+# Redis is required for authentication throttling.
+# Optional throttle policy fields default to 10 failures / 900s window / 900s block.
+redis:
+  host: 127.0.0.1
+  port: 6380
+  # password: redis-secret
+  # db: 0
+  # keyPrefix: team-hub:
+  # maxFailures: 10
+  # windowSeconds: 900
+  # blockSeconds: 900
+
+# Optional hub-proxied LLM access. Omit this section to disable LLM routes.
+# At least one provider apiKey is required when llm is present.
+# User access and monthly token limits are configured via the CLI (see docs/llm.md).
+#
+# When models is omitted, every catalog model whose provider has a configured key
+# is offered. Supported model ids:
+#   openai:  gpt-4o, gpt-4o-mini
+#   claude:  claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
+#   gemini:  gemini-1.5-pro, gemini-1.5-flash
+#
+# llm:
+#   providers:
+#     openai:
+#       apiKey: sk-...
+#     claude:
+#       apiKey: sk-ant-...
+#     gemini:
+#       apiKey: ...
+#   models:
+#     - gpt-4o
+#     - gpt-4o-mini
+#     - claude-3-5-sonnet-20241022
+#     - claude-3-5-haiku-20241022
+#     - gemini-1.5-pro
+#     - gemini-1.5-flash

@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { ZodError } from 'zod/v4';
+import { normalizeLlmConfig, type LlmConfig } from '#/config/llmConfig.js';
 import {
   dbSectionSchema,
+  llmSectionSchema,
   redisSectionSchema,
   serverConfigDocumentSchema,
   serverSectionSchema
@@ -34,6 +36,11 @@ export interface ServerConfig {
    * Raw `redis` section from server.yaml; validated by {@link RedisThrottleStore.fromConfig}.
    */
   redis: Record<string, unknown>;
+
+  /**
+   * Normalized LLM provider settings when the optional `llm` section is present.
+   */
+  llm: LlmConfig | null;
 }
 
 /**
@@ -173,11 +180,21 @@ function parseServerConfig(document: unknown): ServerConfig {
     throw new ConfigError(formatZodError(parsedDocument.error));
   }
 
+  let llm: LlmConfig | null = null;
+  if (root.llm !== undefined) {
+    const parsedLlmSection = llmSectionSchema.safeParse(root.llm);
+    if (!parsedLlmSection.success) {
+      throw new ConfigError(formatZodError(parsedLlmSection.error));
+    }
+    llm = normalizeLlmConfig(parsedLlmSection.data);
+  }
+
   return {
     port: parsedDocument.data.server.port,
     host: parsedDocument.data.server.host,
     db: parsedDbSection.data as Record<string, unknown>,
-    redis: parsedRedisSection.data as Record<string, unknown>
+    redis: parsedRedisSection.data as Record<string, unknown>,
+    llm
   };
 }
 

@@ -50,6 +50,21 @@ export interface UserCreateCommandOptions extends UserCommandOptions {
    * Environment ids or `*` granting environment access.
    */
   environmentAccess: string[];
+
+  /**
+   * Whether the user may use hub-proxied LLM routes.
+   */
+  llmAccess?: boolean;
+
+  /**
+   * LLM model ids or `*` granting model access.
+   */
+  llmModels?: string[];
+
+  /**
+   * Monthly LLM token limit, or undefined for unlimited.
+   */
+  llmMonthlyTokens?: number;
 }
 
 export interface UserUpdateCommandOptions extends UserCommandOptions {
@@ -77,6 +92,21 @@ export interface UserUpdateCommandOptions extends UserCommandOptions {
    * Replacement environment access list.
    */
   environmentAccess?: string[];
+
+  /**
+   * Whether the user may use hub-proxied LLM routes.
+   */
+  llmAccess?: boolean;
+
+  /**
+   * Replacement LLM model access list.
+   */
+  llmModels?: string[];
+
+  /**
+   * Replacement monthly LLM token limit.
+   */
+  llmMonthlyTokens?: number;
 }
 
 export interface UserTokenCreateCommandOptions extends UserCommandOptions {
@@ -180,6 +210,22 @@ function parseAccessFlag(_value: string, previous: string[]): string[] {
 }
 
 /**
+ * Parses a positive integer token limit from CLI input.
+ *
+ * @param value - Token limit string from a Commander option.
+ * @returns Parsed positive integer limit.
+ * @throws {InvalidArgumentError} When the value is not a positive integer.
+ */
+function parseMonthlyTokenLimit(value: string): number {
+  const parsed = Number(value.trim());
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new InvalidArgumentError('Monthly token limit must be a positive integer.');
+  }
+
+  return parsed;
+}
+
+/**
  * Normalizes access lists for admin accounts and validates wildcard usage.
  *
  * @param role - Target user role.
@@ -221,6 +267,9 @@ function printUser(user: {
   role: UserRole;
   collectionAccess: string[];
   environmentAccess: string[];
+  llmAccess: boolean;
+  llmModels: string[];
+  llmMonthlyTokenLimit: number | null;
   createdAt: Date;
   updatedAt: Date;
 }): void {
@@ -229,6 +278,11 @@ function printUser(user: {
   console.log(`  role: ${user.role}`);
   console.log(`  collection access: ${formatAccessList(user.collectionAccess)}`);
   console.log(`  environment access: ${formatAccessList(user.environmentAccess)}`);
+  console.log(`  llm access: ${user.llmAccess ? 'enabled' : 'disabled'}`);
+  console.log(`  llm models: ${formatAccessList(user.llmModels)}`);
+  console.log(
+    `  llm monthly tokens: ${user.llmMonthlyTokenLimit != null ? user.llmMonthlyTokenLimit : 'unlimited'}`
+  );
   console.log(`  created: ${user.createdAt.toISOString()}`);
   console.log(`  updated: ${user.updatedAt.toISOString()}`);
 }
@@ -273,7 +327,10 @@ export async function userCreateCommand(options: UserCreateCommandOptions): Prom
       name: options.name,
       role: options.role,
       collectionAccess: access.collectionAccess,
-      environmentAccess: access.environmentAccess
+      environmentAccess: access.environmentAccess,
+      llmAccess: options.llmAccess ?? false,
+      llmModels: options.llmModels ?? [],
+      llmMonthlyTokenLimit: options.llmMonthlyTokens ?? null
     },
     actingUserId
   );
@@ -360,7 +417,11 @@ export async function userUpdateCommand(options: UserUpdateCommandOptions): Prom
     name: options.name,
     role: options.role,
     collectionAccess: access.collectionAccess,
-    environmentAccess: access.environmentAccess
+    environmentAccess: access.environmentAccess,
+    llmAccess: options.llmAccess,
+    llmModels: options.llmModels,
+    llmMonthlyTokenLimit:
+      options.llmMonthlyTokens !== undefined ? options.llmMonthlyTokens : undefined
   };
 
   const user = await db.updateUser(options.id, input, actingUserId);
@@ -512,6 +573,9 @@ export function registerUserCommand(
       parseAccessFlag,
       [] as string[]
     )
+    .option('--llm-access', 'Enable hub-proxied LLM access for the user')
+    .option('--llm-model <id>', 'LLM model id or * (repeatable)', parseAccessFlag, [] as string[])
+    .option('--llm-monthly-tokens <count>', 'Monthly LLM token limit', parseMonthlyTokenLimit)
     .action(
       /**
        * Runs the user create subcommand after merging global CLI options.
@@ -564,6 +628,15 @@ export function registerUserCommand(
       parseAccessFlag,
       [] as string[]
     )
+    .option('--llm-access', 'Enable hub-proxied LLM access for the user')
+    .option('--no-llm-access', 'Disable hub-proxied LLM access for the user')
+    .option(
+      '--llm-model <id>',
+      'Replacement LLM model id or * (repeatable)',
+      parseAccessFlag,
+      [] as string[]
+    )
+    .option('--llm-monthly-tokens <count>', 'Monthly LLM token limit', parseMonthlyTokenLimit)
     .action(
       /**
        * Runs the user update subcommand after merging global CLI options.
@@ -579,7 +652,8 @@ export function registerUserCommand(
           collectionAccess:
             (options.collectionAccess ?? []).length > 0 ? options.collectionAccess : undefined,
           environmentAccess:
-            (options.environmentAccess ?? []).length > 0 ? options.environmentAccess : undefined
+            (options.environmentAccess ?? []).length > 0 ? options.environmentAccess : undefined,
+          llmModels: (options.llmModels ?? []).length > 0 ? options.llmModels : undefined
         };
         await (handlers.update ?? userUpdateCommand)(input);
       }

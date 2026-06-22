@@ -59,6 +59,21 @@ export interface FirestoreUserDocument {
    * User who last updated the account.
    */
   updatedByUserId: string | null;
+
+  /**
+   * When true, the user may call hub-proxied LLM routes.
+   */
+  llmAccess?: boolean;
+
+  /**
+   * LLM model ids the user may use, or `['*']` for all hub-offered models.
+   */
+  llmModels?: string[];
+
+  /**
+   * Maximum total tokens per UTC calendar month, or null for unlimited.
+   */
+  llmMonthlyTokenLimit?: number | null;
 }
 
 /**
@@ -374,4 +389,39 @@ export interface FirestoreAuditLogDocument {
    * Optional structured context for the action.
    */
   metadata: Record<string, unknown> | null;
+}
+
+/**
+ * Firestore document shape for persisted monthly LLM usage.
+ */
+export interface FirestoreLlmUsageDocument {
+  /**
+   * Owning user identifier.
+   */
+  userId: string;
+
+  /**
+   * UTC calendar month key (`YYYY-MM`).
+   */
+  period: string;
+
+  /**
+   * Prompt tokens consumed during the period.
+   */
+  promptTokens: number;
+
+  /**
+   * Completion tokens consumed during the period.
+   */
+  completionTokens: number;
+
+  /**
+   * Total tokens consumed during the period.
+   */
+  totalTokens: number;
+
+  /**
+   * When usage was last updated.
+   */
+  updatedAt: Date;
 }

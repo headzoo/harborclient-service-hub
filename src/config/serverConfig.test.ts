@@ -52,7 +52,8 @@ ${sampleDbSection}${sampleRedisSection}`);
       redis: {
         host: '127.0.0.1',
         port: 6380
-      }
+      },
+      llm: null
     });
   });
 
@@ -76,6 +77,43 @@ ${sampleDbSection}${sampleRedisSection}`);
       redis: {
         host: '127.0.0.1',
         port: 6380
+      },
+      llm: null
+    });
+  });
+
+  it('loads an optional llm section', () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}${sampleRedisSection}llm:
+  providers:
+    openai:
+      apiKey: sk-test
+  models:
+    - gpt-4o
+`);
+
+    expect(loadServerConfig(configPath)).toEqual({
+      port: 8787,
+      host: '127.0.0.1',
+      db: {
+        driver: 'postgres',
+        host: '127.0.0.1',
+        port: 5432,
+        user: 'harbor',
+        password: 'harbor',
+        database: 'harbor'
+      },
+      redis: {
+        host: '127.0.0.1',
+        port: 6380
+      },
+      llm: {
+        providers: {
+          openai: { apiKey: 'sk-test' }
+        },
+        models: ['gpt-4o']
       }
     });
   });

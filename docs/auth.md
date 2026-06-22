@@ -146,6 +146,11 @@ team-hub user create --name alice --role user \
 team-hub user create --name bob --role user \
   --collection-access <collection-id> --environment-access <environment-id>
 
+# Grant hub-proxied LLM access (see docs/llm.md)
+team-hub user create --name carol --role user \
+  --collection-access '*' --environment-access '*' \
+  --llm-access --llm-model '*' --llm-monthly-tokens 100000
+
 team-hub user list
 team-hub user show <user-id>
 team-hub user update <user-id> --role user --collection-access '*'

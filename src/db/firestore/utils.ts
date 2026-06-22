@@ -5,6 +5,7 @@ import type {
   CollectionRecord,
   EnvironmentRecord,
   FolderRecord,
+  LlmUsageRecord,
   SavedRequestRecord,
   UserRecord
 } from '#/db/types.js';
@@ -14,6 +15,7 @@ import type {
   FirestoreCollectionDocument,
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
+  FirestoreLlmUsageDocument,
   FirestoreRequestDocument,
   FirestoreUserDocument
 } from '#/db/firestore/types.js';
@@ -80,10 +82,32 @@ export function mapFirestoreUser(id: string, data: FirestoreUserDocument): UserR
     role: data.role,
     collectionAccess: data.collectionAccess,
     environmentAccess: data.environmentAccess,
+    llmAccess: data.llmAccess ?? false,
+    llmModels: data.llmModels ?? [],
+    llmMonthlyTokenLimit: data.llmMonthlyTokenLimit ?? null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
     createdByUserId: data.createdByUserId ?? null,
     updatedByUserId: data.updatedByUserId ?? null
+  };
+}
+
+/**
+ * Maps a Firestore document to the shared {@link LlmUsageRecord} shape.
+ *
+ * @param id - Document identifier.
+ * @param data - Stored LLM usage fields.
+ * @returns Normalized usage record for application code.
+ */
+export function mapFirestoreLlmUsage(id: string, data: FirestoreLlmUsageDocument): LlmUsageRecord {
+  return {
+    id,
+    userId: data.userId,
+    period: data.period,
+    promptTokens: data.promptTokens,
+    completionTokens: data.completionTokens,
+    totalTokens: data.totalTokens,
+    updatedAt: data.updatedAt
   };
 }
 

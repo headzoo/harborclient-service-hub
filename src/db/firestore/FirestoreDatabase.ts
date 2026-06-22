@@ -8,6 +8,7 @@ import {
   COLLECTIONS_COLLECTION,
   ENVIRONMENTS_COLLECTION,
   FOLDERS_COLLECTION,
+  LLM_USAGE_COLLECTION,
   REQUESTS_COLLECTION,
   USERS_COLLECTION,
   WRITE_BATCH_LIMIT
@@ -21,6 +22,7 @@ import type {
   FirestoreDatabaseConfig,
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
+  FirestoreLlmUsageDocument,
   FirestoreRequestDocument,
   FirestoreUserDocument
 } from '#/db/firestore/types.js';
@@ -30,6 +32,7 @@ import {
   mapFirestoreCollection,
   mapFirestoreEnvironment,
   mapFirestoreFolder,
+  mapFirestoreLlmUsage,
   mapFirestoreRequest,
   mapFirestoreUser
 } from '#/db/firestore/utils.js';
@@ -47,6 +50,7 @@ import type {
   FolderRecord,
   KeyValue,
   ListAuditLogOptions,
+  LlmUsageRecord,
   SaveRequestInput,
   SavedRequestRecord,
   UpdateUserInput,
@@ -75,7 +79,7 @@ export class FirestoreDatabase implements IDatabase {
    *
    * @param config - Parsed Firestore connection settings.
    */
-  constructor(private readonly config: FirestoreDatabaseConfig) {}
+  constructor(private readonly config: FirestoreDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link FirestoreDatabase}.
@@ -184,6 +188,9 @@ export class FirestoreDatabase implements IDatabase {
       role: input.role,
       collectionAccess: input.collectionAccess,
       environmentAccess: input.environmentAccess,
+      llmAccess: input.llmAccess ?? false,
+      llmModels: input.llmModels ?? [],
+      llmMonthlyTokenLimit: input.llmMonthlyTokenLimit ?? null,
       createdAt: now,
       updatedAt: now,
       createdByUserId: attributionUserId,
@@ -263,6 +270,12 @@ export class FirestoreDatabase implements IDatabase {
     const role = input.role ?? existing.role;
     const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
     const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const llmAccess = input.llmAccess ?? existing.llmAccess;
+    const llmModels = input.llmModels ?? existing.llmModels;
+    const llmMonthlyTokenLimit =
+      input.llmMonthlyTokenLimit !== undefined
+        ? input.llmMonthlyTokenLimit
+        : existing.llmMonthlyTokenLimit;
     const updatedAt = new Date();
 
     await this.requireClient().collection(USERS_COLLECTION).doc(id).update({
@@ -270,6 +283,9 @@ export class FirestoreDatabase implements IDatabase {
       role,
       collectionAccess,
       environmentAccess,
+      llmAccess,
+      llmModels,
+      llmMonthlyTokenLimit,
       updatedAt,
       updatedByUserId: actingUserId
     });
@@ -1115,6 +1131,74 @@ export class FirestoreDatabase implements IDatabase {
   }
 
   /**
+   * Returns monthly LLM usage for a user, or null when no usage has been recorded.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   */
+  async getLlmUsage(userId: string, period: string): Promise<LlmUsageRecord | null> {
+    const docId = `${userId}_${period}`;
+    const snapshot = await this.requireClient().collection(LLM_USAGE_COLLECTION).doc(docId).get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return mapFirestoreLlmUsage(docId, snapshot.data() as FirestoreLlmUsageDocument);
+  }
+
+  /**
+   * Atomically increments monthly LLM token usage for a user.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   * @param promptTokens - Prompt tokens to add.
+   * @param completionTokens - Completion tokens to add.
+   */
+  async addLlmUsage(
+    userId: string,
+    period: string,
+    promptTokens: number,
+    completionTokens: number
+  ): Promise<LlmUsageRecord> {
+    const docId = `${userId}_${period}`;
+    const docRef = this.requireClient().collection(LLM_USAGE_COLLECTION).doc(docId);
+    const now = new Date();
+    const totalDelta = promptTokens + completionTokens;
+
+    await this.requireClient().runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        const data: FirestoreLlmUsageDocument = {
+          userId,
+          period,
+          promptTokens,
+          completionTokens,
+          totalTokens: totalDelta,
+          updatedAt: now
+        };
+        transaction.set(docRef, data);
+        return;
+      }
+
+      const existing = snapshot.data() as FirestoreLlmUsageDocument;
+      transaction.update(docRef, {
+        promptTokens: existing.promptTokens + promptTokens,
+        completionTokens: existing.completionTokens + completionTokens,
+        totalTokens: existing.totalTokens + totalDelta,
+        updatedAt: now
+      });
+    });
+
+    const usage = await this.getLlmUsage(userId, period);
+    if (!usage) {
+      throw new Error('LLM usage not found after upsert');
+    }
+
+    return usage;
+  }
+
+  /**
    * Commits document deletes in Firestore-sized batches.
    *
    * @param refs - Document refs to delete.
@@ -1153,6 +1237,9 @@ export class FirestoreDatabase implements IDatabase {
       role: input.role,
       collectionAccess: input.collectionAccess,
       environmentAccess: input.environmentAccess,
+      llmAccess: false,
+      llmModels: [],
+      llmMonthlyTokenLimit: null,
       createdAt: now,
       updatedAt: now,
       createdByUserId: id,

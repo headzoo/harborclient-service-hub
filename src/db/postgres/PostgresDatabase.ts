@@ -36,6 +36,11 @@ import {
   USER_SELECT_COLUMNS,
   type UserSqlRow
 } from '#/db/userRows.js';
+import {
+  LLM_USAGE_SELECT_COLUMNS,
+  mapLlmUsageSqlRow,
+  type LlmUsageSqlRow
+} from '#/db/llmUsageRows.js';
 import type {
   ApiTokenRecord,
   AuditAction,
@@ -48,6 +53,7 @@ import type {
   FolderRecord,
   KeyValue,
   ListAuditLogOptions,
+  LlmUsageRecord,
   SaveRequestInput,
   SavedRequestRecord,
   UpdateUserInput,
@@ -65,6 +71,7 @@ const USER_SELECT = `SELECT ${USER_SELECT_COLUMNS} FROM users`;
 const API_TOKEN_SELECT = `SELECT ${API_TOKEN_SELECT_COLUMNS} FROM api_tokens`;
 const FOLDER_SELECT = `SELECT ${FOLDER_SELECT_COLUMNS} FROM folders`;
 const REQUEST_SELECT = `SELECT ${REQUEST_SELECT_COLUMNS} FROM requests`;
+const LLM_USAGE_SELECT = `SELECT ${LLM_USAGE_SELECT_COLUMNS} FROM llm_usage`;
 
 /**
  * Postgres-backed database implementation.
@@ -85,7 +92,7 @@ export class PostgresDatabase implements IDatabase {
    *
    * @param config - Parsed Postgres connection settings.
    */
-  constructor(private readonly config: PostgresDatabaseConfig) {}
+  constructor(private readonly config: PostgresDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link PostgresDatabase}.
@@ -221,11 +228,14 @@ export class PostgresDatabase implements IDatabase {
         role,
         collection_access,
         environment_access,
+        llm_access,
+        llm_models,
+        llm_monthly_token_limit,
         created_at,
         updated_at,
         created_by_user_id,
         updated_by_user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING ${USER_SELECT_COLUMNS}`,
       [
         id,
@@ -233,6 +243,9 @@ export class PostgresDatabase implements IDatabase {
         input.role,
         serializeAccessList(input.collectionAccess),
         serializeAccessList(input.environmentAccess),
+        input.llmAccess ?? false,
+        serializeAccessList(input.llmModels ?? []),
+        input.llmMonthlyTokenLimit ?? null,
         now,
         now,
         actingUserId,
@@ -298,6 +311,12 @@ export class PostgresDatabase implements IDatabase {
     const role = input.role ?? existing.role;
     const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
     const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const llmAccess = input.llmAccess ?? existing.llmAccess;
+    const llmModels = input.llmModels ?? existing.llmModels;
+    const llmMonthlyTokenLimit =
+      input.llmMonthlyTokenLimit !== undefined
+        ? input.llmMonthlyTokenLimit
+        : existing.llmMonthlyTokenLimit;
     const updatedAt = new Date();
 
     const result = await this.query(
@@ -306,14 +325,20 @@ export class PostgresDatabase implements IDatabase {
         role = $2,
         collection_access = $3,
         environment_access = $4,
-        updated_at = $5,
-        updated_by_user_id = $6
-      WHERE id = $7`,
+        llm_access = $5,
+        llm_models = $6,
+        llm_monthly_token_limit = $7,
+        updated_at = $8,
+        updated_by_user_id = $9
+      WHERE id = $10`,
       [
         name,
         role,
         serializeAccessList(collectionAccess),
         serializeAccessList(environmentAccess),
+        llmAccess,
+        serializeAccessList(llmModels),
+        llmMonthlyTokenLimit,
         updatedAt,
         actingUserId,
         id
@@ -1219,6 +1244,66 @@ export class PostgresDatabase implements IDatabase {
   }
 
   /**
+   * Returns monthly LLM usage for a user, or null when no usage has been recorded.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   */
+  async getLlmUsage(userId: string, period: string): Promise<LlmUsageRecord | null> {
+    const result = await this.query<LlmUsageSqlRow>(
+      `${LLM_USAGE_SELECT} WHERE user_id = $1 AND period = $2 LIMIT 1`,
+      [userId, period]
+    );
+    const row = result.rows[0];
+    return row ? mapLlmUsageSqlRow(row) : null;
+  }
+
+  /**
+   * Atomically increments monthly LLM token usage for a user.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   * @param promptTokens - Prompt tokens to add.
+   * @param completionTokens - Completion tokens to add.
+   */
+  async addLlmUsage(
+    userId: string,
+    period: string,
+    promptTokens: number,
+    completionTokens: number
+  ): Promise<LlmUsageRecord> {
+    const totalDelta = promptTokens + completionTokens;
+    const now = new Date();
+    const id = randomUUID();
+
+    const result = await this.query<LlmUsageSqlRow>(
+      `INSERT INTO llm_usage (
+        id,
+        user_id,
+        period,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (user_id, period) DO UPDATE
+      SET prompt_tokens = llm_usage.prompt_tokens + EXCLUDED.prompt_tokens,
+        completion_tokens = llm_usage.completion_tokens + EXCLUDED.completion_tokens,
+        total_tokens = llm_usage.total_tokens + EXCLUDED.total_tokens,
+        updated_at = EXCLUDED.updated_at
+      RETURNING ${LLM_USAGE_SELECT_COLUMNS}`,
+      [id, userId, period, promptTokens, completionTokens, totalDelta, now]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error('LLM usage not found after upsert');
+    }
+
+    return mapLlmUsageSqlRow(row);
+  }
+
+  /**
    * Returns the active pool or throws when connect has not been called.
    *
    * @returns Connected Postgres pool.
@@ -1256,17 +1341,23 @@ export class PostgresDatabase implements IDatabase {
         role,
         collection_access,
         environment_access,
+        llm_access,
+        llm_models,
+        llm_monthly_token_limit,
         created_at,
         updated_at,
         created_by_user_id,
         updated_by_user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         id,
         SYSTEM_USER_NAME,
         input.role,
         serializeAccessList(input.collectionAccess),
         serializeAccessList(input.environmentAccess),
+        false,
+        serializeAccessList([]),
+        null,
         now,
         now,
         id,

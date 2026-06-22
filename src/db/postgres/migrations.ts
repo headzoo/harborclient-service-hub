@@ -218,6 +218,32 @@ UPDATE folders SET updated_at = created_at WHERE updated_at IS NULL;
 `.trim();
 
 /**
+ * Adds LLM access columns to users when upgrading existing databases.
+ */
+export const USERS_LLM_MIGRATION_SQL = `
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS llm_access BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS llm_models TEXT NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS llm_monthly_token_limit INT;
+`.trim();
+
+/**
+ * DDL for creating the llm_usage table when absent.
+ */
+export const LLM_USAGE_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  prompt_tokens INT NOT NULL DEFAULT 0,
+  completion_tokens INT NOT NULL DEFAULT 0,
+  total_tokens INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (user_id, period)
+);
+`.trim();
+
+/**
  * Ordered Postgres migrations applied by {@link PostgresDatabase.migrate}.
  */
 export const POSTGRES_MIGRATIONS = [
@@ -237,5 +263,7 @@ export const POSTGRES_MIGRATIONS = [
   USERS_ATTRIBUTION_MIGRATION_SQL,
   COLLECTIONS_BACKFILL_UPDATED_AT_SQL,
   ENVIRONMENTS_BACKFILL_UPDATED_AT_SQL,
-  FOLDERS_BACKFILL_UPDATED_AT_SQL
+  FOLDERS_BACKFILL_UPDATED_AT_SQL,
+  USERS_LLM_MIGRATION_SQL,
+  LLM_USAGE_MIGRATION_SQL
 ];

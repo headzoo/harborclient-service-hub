@@ -1,0 +1,169 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createStubDatabase } from '#/db/stubDatabase.js';
+import {
+  authHeader,
+  createProtectedTestApp,
+  sampleUserRecord
+} from '#/server/routes/test/createTestApp.js';
+import * as llmClient from '#/server/llm/client.js';
+
+const sampleLlmConfig = {
+  providers: {
+    openai: { apiKey: 'sk-test' }
+  },
+  models: ['gpt-4o']
+};
+
+describe('llm routes', () => {
+  it('returns 503 when LLM is not configured', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({ db, withValidAuth: true, llm: null });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/llm/models',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('returns 403 when the user lacks LLM access', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      llm: sampleLlmConfig,
+      user: { ...sampleUserRecord, llmAccess: false }
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/llm/models',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('lists allowed models for an LLM-enabled user', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      llm: sampleLlmConfig,
+      user: {
+        ...sampleUserRecord,
+        llmAccess: true,
+        llmModels: ['gpt-4o']
+      }
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/llm/models',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      models: [{ id: 'gpt-4o', label: 'GPT-4o', provider: 'openai' }]
+    });
+    await app.close();
+  });
+
+  it('returns 402 when a new turn exceeds the monthly token limit', async () => {
+    const db = createStubDatabase();
+    db.getLlmUsage.mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period: '2026-06',
+      promptTokens: 900,
+      completionTokens: 100,
+      totalTokens: 1000,
+      updatedAt: new Date('2026-06-01T00:00:00.000Z')
+    });
+
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      llm: sampleLlmConfig,
+      user: {
+        ...sampleUserRecord,
+        llmAccess: true,
+        llmModels: ['*'],
+        llmMonthlyTokenLimit: 1000
+      }
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/llm/chat/step',
+      headers: authHeader(),
+      payload: {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Hello' }]
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    await app.close();
+  });
+
+  it('allows continuation steps after the monthly limit is reached', async () => {
+    const runLlmCompletion = vi.spyOn(llmClient, 'runLlmCompletion').mockResolvedValue({
+      content: 'Done',
+      usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
+    });
+
+    const db = createStubDatabase();
+    db.getLlmUsage.mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period: '2026-06',
+      promptTokens: 900,
+      completionTokens: 100,
+      totalTokens: 1000,
+      updatedAt: new Date('2026-06-01T00:00:00.000Z')
+    });
+    db.addLlmUsage.mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period: '2026-06',
+      promptTokens: 901,
+      completionTokens: 102,
+      totalTokens: 1003,
+      updatedAt: new Date('2026-06-01T00:00:00.000Z')
+    });
+
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      llm: sampleLlmConfig,
+      user: {
+        ...sampleUserRecord,
+        llmAccess: true,
+        llmModels: ['*'],
+        llmMonthlyTokenLimit: 1000
+      }
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/llm/chat/step',
+      headers: authHeader(),
+      payload: {
+        model: 'gpt-4o',
+        messages: [{ role: 'tool', tool_call_id: 'call-1', content: '{}' }]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(runLlmCompletion).toHaveBeenCalledOnce();
+    expect(db.addLlmUsage).toHaveBeenCalledWith('user-1', expect.any(String), 1, 2);
+    runLlmCompletion.mockRestore();
+    await app.close();
+  });
+});

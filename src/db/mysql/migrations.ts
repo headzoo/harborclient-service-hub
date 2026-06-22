@@ -231,6 +231,38 @@ UPDATE folders SET updated_at = created_at WHERE updated_at IS NULL
 `.trim();
 
 /**
+ * Adds LLM access columns to users when upgrading existing databases.
+ */
+export const USERS_LLM_MIGRATION_SQL = `
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS llm_access TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS llm_models LONGTEXT NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS llm_monthly_token_limit INT NULL
+`.trim();
+
+/**
+ * DDL for creating the llm_usage table when absent.
+ */
+export const LLM_USAGE_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  period VARCHAR(7) NOT NULL,
+  prompt_tokens INT NOT NULL DEFAULT 0,
+  completion_tokens INT NOT NULL DEFAULT 0,
+  total_tokens INT NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL,
+  UNIQUE KEY llm_usage_user_period (user_id, period),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)
+`.trim();
+
+/**
+ * Default LLM models JSON for MySQL user inserts on upgraded databases.
+ */
+export const MYSQL_DEFAULT_LLM_MODELS_JSON = '[]';
+
+/**
  * Default auth JSON for MySQL collection/request inserts.
  */
 export const MYSQL_DEFAULT_AUTH_JSON = DEFAULT_AUTH_JSON;
@@ -255,5 +287,7 @@ export const MYSQL_MIGRATIONS = [
   USERS_ATTRIBUTION_MIGRATION_SQL,
   COLLECTIONS_BACKFILL_UPDATED_AT_SQL,
   ENVIRONMENTS_BACKFILL_UPDATED_AT_SQL,
-  FOLDERS_BACKFILL_UPDATED_AT_SQL
+  FOLDERS_BACKFILL_UPDATED_AT_SQL,
+  USERS_LLM_MIGRATION_SQL,
+  LLM_USAGE_MIGRATION_SQL
 ];

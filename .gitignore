@@ -6,3 +6,4 @@ dist
 AGENTS.md
 docs/.vitepress/cache
 docs/.vitepress/dist
+server.yaml

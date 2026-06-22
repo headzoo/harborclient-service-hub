@@ -24,6 +24,9 @@ export const sampleUserRecord: UserRecord = {
   role: 'user',
   collectionAccess: ['*'],
   environmentAccess: ['*'],
+  llmAccess: false,
+  llmModels: [],
+  llmMonthlyTokenLimit: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   ...sampleAttribution
@@ -67,6 +70,11 @@ export interface CreateProtectedTestAppOptions {
    * User record returned by auth lookup; defaults to {@link sampleUserRecord}.
    */
   user?: UserRecord;
+
+  /**
+   * LLM configuration passed to protected routes; defaults to null (LLM disabled).
+   */
+  llm?: import('#/config/llmConfig.js').LlmConfig | null;
 }
 
 /**
@@ -95,7 +103,8 @@ export async function createProtectedTestApp(
     await registerProtectedRoutes(protectedApp, {
       version: '0.1.0',
       db: options.db,
-      throttleStore
+      throttleStore,
+      llm: options.llm ?? null
     });
   });
 

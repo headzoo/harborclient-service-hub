@@ -11,7 +11,8 @@ import type {
   SavedRequestRecord,
   UpdateUserInput,
   UserRecord,
-  Variable
+  Variable,
+  LlmUsageRecord
 } from '#/db/types.js';
 import type { ApiTokenRecord } from '#/db/types.js';
 
@@ -355,4 +356,27 @@ export interface IDatabase {
     index: number,
     actingUserId: string
   ): Promise<void>;
+
+  /**
+   * Returns monthly LLM usage for a user, or null when no usage has been recorded.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   */
+  getLlmUsage(userId: string, period: string): Promise<LlmUsageRecord | null>;
+
+  /**
+   * Atomically increments monthly LLM token usage for a user.
+   *
+   * @param userId - Owning user identifier.
+   * @param period - UTC calendar month key (`YYYY-MM`).
+   * @param promptTokens - Prompt tokens to add.
+   * @param completionTokens - Completion tokens to add.
+   */
+  addLlmUsage(
+    userId: string,
+    period: string,
+    promptTokens: number,
+    completionTokens: number
+  ): Promise<LlmUsageRecord>;
 }

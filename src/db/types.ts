@@ -120,6 +120,21 @@ export interface UserRecord {
   environmentAccess: string[];
 
   /**
+   * When true, the user may call hub-proxied LLM routes.
+   */
+  llmAccess: boolean;
+
+  /**
+   * LLM model ids the user may use, or `['*']` for all hub-offered models.
+   */
+  llmModels: string[];
+
+  /**
+   * Maximum total tokens per UTC calendar month, or null for unlimited.
+   */
+  llmMonthlyTokenLimit: number | null;
+
+  /**
    * When the user account was created.
    */
   createdAt: Date;
@@ -163,6 +178,21 @@ export interface CreateUserInput {
    * Environment access list; admins store an empty array.
    */
   environmentAccess: string[];
+
+  /**
+   * Whether the user may use hub-proxied LLM routes.
+   */
+  llmAccess?: boolean;
+
+  /**
+   * Allowed LLM model ids, or `['*']` for all hub-offered models.
+   */
+  llmModels?: string[];
+
+  /**
+   * Monthly token limit, or null for unlimited.
+   */
+  llmMonthlyTokenLimit?: number | null;
 }
 
 /**
@@ -188,6 +218,21 @@ export interface UpdateUserInput {
    * Replacement environment access list.
    */
   environmentAccess?: string[];
+
+  /**
+   * Whether the user may use hub-proxied LLM routes.
+   */
+  llmAccess?: boolean;
+
+  /**
+   * Replacement LLM model access list.
+   */
+  llmModels?: string[];
+
+  /**
+   * Replacement monthly token limit, or null for unlimited.
+   */
+  llmMonthlyTokenLimit?: number | null;
 }
 
 /**
@@ -245,6 +290,46 @@ export interface ApiTokenRecord {
    * User who last updated the token record.
    */
   updatedByUserId: string | null;
+}
+
+/**
+ * Persisted monthly LLM token usage for a user.
+ */
+export interface LlmUsageRecord {
+  /**
+   * Stable identifier for the usage row.
+   */
+  id: string;
+
+  /**
+   * Owning user account id.
+   */
+  userId: string;
+
+  /**
+   * UTC calendar month key (`YYYY-MM`).
+   */
+  period: string;
+
+  /**
+   * Prompt tokens consumed during the period.
+   */
+  promptTokens: number;
+
+  /**
+   * Completion tokens consumed during the period.
+   */
+  completionTokens: number;
+
+  /**
+   * Total tokens consumed during the period.
+   */
+  totalTokens: number;
+
+  /**
+   * When usage was last updated.
+   */
+  updatedAt: Date;
 }
 
 /**

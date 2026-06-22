@@ -48,6 +48,21 @@ export interface UserSqlRow {
    * Last updating user identifier column.
    */
   updated_by_user_id: string | null;
+
+  /**
+   * Whether LLM access is enabled for the account.
+   */
+  llm_access: boolean;
+
+  /**
+   * JSON-encoded LLM model access list column.
+   */
+  llm_models: string;
+
+  /**
+   * Monthly token limit column, or null for unlimited.
+   */
+  llm_monthly_token_limit: number | null;
 }
 
 /**
@@ -71,7 +86,11 @@ function parseUserRole(role: string): UserRole {
  * @param value - JSON array string from the database.
  * @returns Parsed access id list.
  */
-function parseAccessList(value: string): string[] {
+function parseAccessList(value: string | null | undefined): string[] {
+  if (value == null || value === '') {
+    return [];
+  }
+
   const parsed: unknown = JSON.parse(value);
   if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === 'string')) {
     throw new Error('Invalid access list JSON in users table');
@@ -93,6 +112,9 @@ export function mapUserSqlRow(row: UserSqlRow): UserRecord {
     role: parseUserRole(row.role),
     collectionAccess: parseAccessList(row.collection_access),
     environmentAccess: parseAccessList(row.environment_access),
+    llmAccess: Boolean(row.llm_access),
+    llmModels: parseAccessList(row.llm_models),
+    llmMonthlyTokenLimit: row.llm_monthly_token_limit,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdByUserId: row.created_by_user_id ?? null,
@@ -113,7 +135,7 @@ export function serializeAccessList(access: string[]): string {
 /**
  * Column list for SELECT queries against the users table.
  */
-export const USER_SELECT_COLUMNS = `id, name, role, collection_access, environment_access, created_at, updated_at, created_by_user_id, updated_by_user_id`;
+export const USER_SELECT_COLUMNS = `id, name, role, collection_access, environment_access, llm_access, llm_models, llm_monthly_token_limit, created_at, updated_at, created_by_user_id, updated_by_user_id`;
 
 /**
  * Column list for SELECT queries against the collections table.

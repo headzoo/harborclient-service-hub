@@ -545,3 +545,96 @@ Set `folderId` to `null` to move the request to the collection root at `index`.
 **Response `204`:** No content.
 
 **Response `404`:** Request or folder not found.
+
+## LLM routes
+
+Hub-proxied LLM routes require bearer authentication and a user account with `llmAccess` enabled. When the `llm` section is absent from `server.yaml`, these routes return `503`.
+
+See [LLM Proxy](./llm.md) for configuration and CLI management.
+
+### `GET /llm/models`
+
+Lists hub-offered models the authenticated user may use.
+
+**Auth:** Bearer token required.
+
+**Response `200`:**
+
+```json
+{
+  "models": [
+    {
+      "id": "gpt-4o",
+      "label": "GPT-4o",
+      "provider": "openai"
+    }
+  ]
+}
+```
+
+**Response `403`:** User lacks LLM access or the route is forbidden.
+
+**Response `503`:** LLM support is not configured on the hub.
+
+### `GET /llm/usage`
+
+Returns the authenticated user's current monthly token usage.
+
+**Auth:** Bearer token required.
+
+**Response `200`:**
+
+```json
+{
+  "period": "2026-06",
+  "totalTokens": 12345,
+  "limit": 100000
+}
+```
+
+`limit` is `null` when the user has no monthly cap.
+
+### `POST /llm/chat/step`
+
+Runs one stateless LLM completion step using hub-configured provider keys.
+
+**Auth:** Bearer token required.
+
+**Request body:**
+
+```json
+{
+  "model": "gpt-4o",
+  "messages": [
+    { "role": "user", "content": "Hello" }
+  ],
+  "systemPrompt": "You are HarborClient assistant.",
+  "tools": []
+}
+```
+
+**Response `200`:**
+
+```json
+{
+  "content": "Hi there.",
+  "toolCalls": [
+    {
+      "id": "call_1",
+      "name": "list_collections",
+      "arguments": "{}"
+    }
+  ],
+  "usage": {
+    "promptTokens": 10,
+    "completionTokens": 5,
+    "totalTokens": 15
+  }
+}
+```
+
+**Response `402`:** Monthly token limit reached for a new user turn.
+
+**Response `403`:** User lacks LLM access or the requested model is not allowed.
+
+**Response `503`:** LLM support is not configured on the hub.
