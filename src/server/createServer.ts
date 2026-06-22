@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -8,6 +7,7 @@ import {
 import type { ServerConfig } from '#/config/serverConfig.js';
 import type { IDatabase } from '#/db/IDatabase.js';
 import type { IThrottleStore } from '#/server/auth/throttle/IThrottleStore.js';
+import { readPackageVersion } from '#/packageVersion.js';
 import { registerRoutes } from '#/server/routes/index.js';
 
 export interface CreateServerOptions {
@@ -30,18 +30,6 @@ export interface CreateServerOptions {
    * Redis-backed store for authentication throttling on protected routes.
    */
   throttleStore: IThrottleStore;
-}
-
-/**
- * Reads the package version from the nearest package.json.
- *
- * @returns Semantic version string from package.json.
- */
-function readPackageVersion(): string {
-  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version: string;
-  };
-  return pkg.version;
 }
 
 /**

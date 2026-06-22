@@ -1,17 +1,15 @@
-import { readFileSync } from 'node:fs';
 import { CommanderError } from 'commander';
 import { normalizeCliArgv } from '#/cli/argv.js';
 import { createProgram } from '#/cli/program.js';
+import { readPackageVersion } from '#/packageVersion.js';
 
-const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
-  version: string;
-};
+const version = readPackageVersion();
 
 /**
  * CLI entry point: builds the Commander program and parses process arguments.
  */
 async function main(): Promise<void> {
-  const program = createProgram(pkg.version);
+  const program = createProgram(version);
   program.exitOverride();
 
   try {
