@@ -16,19 +16,82 @@ Migration also assigns any legacy tokens without an owner to a bootstrap user na
 
 ## Roles and access
 
-| Role | API access | Purpose |
-| ---- | ---------- | ------- |
-| `user` | Scoped by access lists; `*` means all | HarborClient desktop clients |
-| `admin` | None (403 on all entity routes) | User management via CLI only |
+Every account has a role of either `user` or `admin`. Set the role when creating or updating a user via the CLI (see [Manage users](#manage-users)).
 
-Each `user`-role account has:
+### Roles
 
-- `collectionAccess` — collection UUIDs, or `['*']` for all collections (including folders and requests)
-- `environmentAccess` — environment UUIDs, or `['*']` for all environments
+| Role | Purpose | HTTP API | API tokens | CLI |
+| ---- | ------- | -------- | ---------- | --- |
+| `user` | HarborClient desktop clients | Entity routes (collections, environments, folders, requests) — see [API Endpoints](./endpoints.md) | Yes | User and token management (any operator with shell access) |
+| `admin` | Operator identity without data API access | **403 Forbidden** on all entity routes | **No** — token creation rejected | User and token management (any operator with shell access) |
 
-Admin accounts store empty access lists. Only `user`-role accounts may have API tokens.
+**`admin` accounts**
+
+- Cannot receive bearer tokens — `user token create` fails for admin users.
+- Always store empty access lists; passing `--collection-access` or `--environment-access` on create or update is rejected.
+- Provide a named operator account that cannot read or mutate shared HarborClient data via the HTTP API. The system prevents token issuance for this role.
+
+**`user` accounts**
+
+- Intended for HarborClient desktop clients authenticating with `hbk_…` bearer tokens.
+- Permissions come from the role plus access lists described in [Access](#access) below.
+- User and token management has no HTTP endpoints — operators use the CLI regardless of their own account role.
+
+### Access
+
+Access lists scope what a `user`-role account can see and change via the API. Both fields are independent JSON arrays of UUID strings on the user record. Only `user`-role accounts use these fields; `admin` accounts always have `[]`.
+
+**Wildcard `*`**
+
+- `['*']` grants all resources of that type.
+- The wildcard must be the only entry — the CLI rejects lists like `['*', '<uuid>']`.
+- Set via `--collection-access '*'` or `--environment-access '*'`.
+
+**What each list controls**
+
+| Field | Governs |
+| ----- | ------- |
+| `collectionAccess` | Collections, and all folders and requests inside allowed collections |
+| `environmentAccess` | Environments only |
+
+**Permission matrix for `user` accounts**
+
+| Access config | List (GET) | Create top-level resource (POST `/collections` or `/environments`) | CRUD inside allowed scope |
+| ------------- | ---------- | ------------------------------------------------------------------ | ------------------------- |
+| `['*']` | All | Yes | Yes |
+| Specific UUIDs | Only listed ids | No (403) | Yes for listed collections/environments |
+| `[]` | Empty (200, `[]`) | No | 403 on any entity operation |
+
+Scoped users can create folders and requests **within** collections they can access. Only **new top-level** collections or environments require wildcard access on the relevant list.
+
+**Token inheritance**
+
+API tokens do not carry their own scope. Each token inherits the owning user's `collectionAccess` and `environmentAccess` entirely.
+
+**HTTP outcomes**
+
+- Invalid or missing token → **401** (see [API Endpoints — Errors](./endpoints.md#errors)).
+- Valid token but wrong role or out-of-scope resource → **403** `{ "error": "Forbidden" }`.
+
+```mermaid
+flowchart TD
+  UserAccount["user account"]
+  Token["API token hbk_..."]
+  CollAccess["collectionAccess"]
+  EnvAccess["environmentAccess"]
+  CollRoutes["collections / folders / requests"]
+  EnvRoutes["environments"]
+
+  UserAccount --> CollAccess
+  UserAccount --> EnvAccess
+  Token -->|"inherits scope"| UserAccount
+  CollAccess --> CollRoutes
+  EnvAccess --> EnvRoutes
+```
 
 ## Manage users
+
+Use the command line to create and manage users.
 
 ```bash
 # Create an admin (CLI-only account)
@@ -70,21 +133,3 @@ Token prefix: hbk_AbCd1234
 Store this token now; it will not be shown again:
 hbk_...
 ```
-
-## Using tokens from HarborClient
-
-In HarborClient, configure request or collection authorization as **Bearer Token** and paste the secret from `user token create`.
-
-The server validates:
-
-```http
-Authorization: Bearer hbk_...
-```
-
-Protected routes return `401 Unauthorized` with `WWW-Authenticate: Bearer` when the header is missing, malformed, or the token is unknown or revoked.
-
-Authenticated admin tokens receive `403 Forbidden` on all collection, environment, folder, and request routes.
-
-`GET /health` remains public for load balancers and connectivity checks.
-
-See [API Endpoints](./endpoints.md) for the full route reference.
