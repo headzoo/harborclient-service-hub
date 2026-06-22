@@ -4,6 +4,7 @@ import { loadServerConfig } from '#/config/serverConfig.js';
 import { createDatabase } from '#/db/index.js';
 import type { ApiTokenRecord, CreateUserInput, UpdateUserInput, UserRole } from '#/db/types.js';
 import { generateApiToken } from '#/server/auth/apiTokens.js';
+import { currentUsagePeriod } from '#/server/llm/models.js';
 import type { IDatabase } from '#/db/IDatabase.js';
 
 /**
@@ -210,6 +211,17 @@ function parseAccessFlag(_value: string, previous: string[]): string[] {
 }
 
 /**
+ * Reads LLM model access ids from parsed Commander create/update options.
+ *
+ * Commander maps `--llm-model` to the `llmModel` property rather than `llmModels`.
+ *
+ * @param options - Parsed options that may include either property name.
+ */
+function readLlmModelsOption(options: { llmModels?: string[]; llmModel?: string[] }): string[] {
+  return options.llmModels ?? options.llmModel ?? [];
+}
+
+/**
  * Parses a positive integer token limit from CLI input.
  *
  * @param value - Token limit string from a Commander option.
@@ -257,22 +269,41 @@ function normalizeAccessForRole(
 }
 
 /**
+ * Optional monthly LLM usage fields for CLI user listings.
+ */
+interface UserDisplayUsage {
+  /**
+   * UTC calendar month key (`YYYY-MM`) for the usage total.
+   */
+  llmUsagePeriod: string;
+
+  /**
+   * Total tokens consumed during {@link UserDisplayUsage.llmUsagePeriod}.
+   */
+  llmTokensUsed: number;
+}
+
+/**
  * Prints a user record for CLI listings.
  *
  * @param user - User record to display.
+ * @param usage - Current-month LLM usage when listing or showing users.
  */
-function printUser(user: {
-  id: string;
-  name: string;
-  role: UserRole;
-  collectionAccess: string[];
-  environmentAccess: string[];
-  llmAccess: boolean;
-  llmModels: string[];
-  llmMonthlyTokenLimit: number | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): void {
+function printUser(
+  user: {
+    id: string;
+    name: string;
+    role: UserRole;
+    collectionAccess: string[];
+    environmentAccess: string[];
+    llmAccess: boolean;
+    llmModels: string[];
+    llmMonthlyTokenLimit: number | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  usage?: UserDisplayUsage
+): void {
   console.log(`- id: ${user.id}`);
   console.log(`  name: ${user.name}`);
   console.log(`  role: ${user.role}`);
@@ -283,6 +314,9 @@ function printUser(user: {
   console.log(
     `  llm monthly tokens: ${user.llmMonthlyTokenLimit != null ? user.llmMonthlyTokenLimit : 'unlimited'}`
   );
+  if (usage) {
+    console.log(`  llm tokens used (${usage.llmUsagePeriod}): ${usage.llmTokensUsed}`);
+  }
   console.log(`  created: ${user.createdAt.toISOString()}`);
   console.log(`  updated: ${user.updatedAt.toISOString()}`);
 }
@@ -329,7 +363,7 @@ export async function userCreateCommand(options: UserCreateCommandOptions): Prom
       collectionAccess: access.collectionAccess,
       environmentAccess: access.environmentAccess,
       llmAccess: options.llmAccess ?? false,
-      llmModels: options.llmModels ?? [],
+      llmModels: readLlmModelsOption(options),
       llmMonthlyTokenLimit: options.llmMonthlyTokens ?? null
     },
     actingUserId
@@ -355,6 +389,13 @@ export async function userListCommand(options: UserCommandOptions): Promise<void
 
   await db.connect();
   const users = await db.listUsers();
+  const period = currentUsagePeriod();
+  const tokensUsedByUser = await Promise.all(
+    users.map(async (user) => {
+      const usage = await db.getLlmUsage(user.id, period);
+      return usage?.totalTokens ?? 0;
+    })
+  );
   await db.disconnect();
 
   if (users.length === 0) {
@@ -362,8 +403,8 @@ export async function userListCommand(options: UserCommandOptions): Promise<void
     return;
   }
 
-  for (const user of users) {
-    printUser(user);
+  for (const [index, user] of users.entries()) {
+    printUser(user, { llmUsagePeriod: period, llmTokensUsed: tokensUsedByUser[index] ?? 0 });
   }
 }
 
@@ -378,14 +419,18 @@ export async function userShowCommand(options: UserUpdateCommandOptions): Promis
 
   await db.connect();
   const user = await db.findUserById(options.id);
-  await db.disconnect();
 
   if (!user) {
+    await db.disconnect();
     console.log(`No user found with id ${options.id}.`);
     return;
   }
 
-  printUser(user);
+  const period = currentUsagePeriod();
+  const usage = await db.getLlmUsage(user.id, period);
+  await db.disconnect();
+
+  printUser(user, { llmUsagePeriod: period, llmTokensUsed: usage?.totalTokens ?? 0 });
 }
 
 /**
@@ -653,7 +698,10 @@ export function registerUserCommand(
             (options.collectionAccess ?? []).length > 0 ? options.collectionAccess : undefined,
           environmentAccess:
             (options.environmentAccess ?? []).length > 0 ? options.environmentAccess : undefined,
-          llmModels: (options.llmModels ?? []).length > 0 ? options.llmModels : undefined
+          llmModels: (() => {
+            const llmModels = readLlmModelsOption(options);
+            return llmModels.length > 0 ? llmModels : undefined;
+          })()
         };
         await (handlers.update ?? userUpdateCommand)(input);
       }

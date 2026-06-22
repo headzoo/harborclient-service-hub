@@ -258,6 +258,31 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 `.trim();
 
 /**
+ * DDL for creating the llm_usage_log table when absent.
+ */
+export const LLM_USAGE_LOG_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS llm_usage_log (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  api_token_id VARCHAR(36) NULL,
+  period VARCHAR(7) NOT NULL,
+  model VARCHAR(255) NOT NULL,
+  provider VARCHAR(32) NOT NULL,
+  prompt_tokens INT NOT NULL,
+  completion_tokens INT NOT NULL,
+  total_tokens INT NOT NULL,
+  is_new_turn BOOLEAN NOT NULL DEFAULT FALSE,
+  had_tool_calls BOOLEAN NOT NULL DEFAULT FALSE,
+  message_count INT NOT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX llm_usage_log_user_created_at_idx (user_id, created_at),
+  INDEX llm_usage_log_period_idx (period),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (api_token_id) REFERENCES api_tokens(id) ON DELETE SET NULL
+)
+`.trim();
+
+/**
  * Default LLM models JSON for MySQL user inserts on upgraded databases.
  */
 export const MYSQL_DEFAULT_LLM_MODELS_JSON = '[]';
@@ -289,5 +314,6 @@ export const MYSQL_MIGRATIONS = [
   ENVIRONMENTS_BACKFILL_UPDATED_AT_SQL,
   FOLDERS_BACKFILL_UPDATED_AT_SQL,
   USERS_LLM_MIGRATION_SQL,
-  LLM_USAGE_MIGRATION_SQL
+  LLM_USAGE_MIGRATION_SQL,
+  LLM_USAGE_LOG_MIGRATION_SQL
 ];

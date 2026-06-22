@@ -37,6 +37,11 @@ import {
   type UserSqlRow
 } from '#/db/userRows.js';
 import {
+  LLM_USAGE_LOG_SELECT_COLUMNS,
+  mapLlmUsageLogSqlRow,
+  type LlmUsageLogSqlRow
+} from '#/db/llmUsageLogRows.js';
+import {
   LLM_USAGE_SELECT_COLUMNS,
   mapLlmUsageSqlRow,
   type LlmUsageSqlRow
@@ -49,10 +54,12 @@ import type {
   AuthConfig,
   CollectionRecord,
   CreateUserInput,
+  CreateLlmUsageLogInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   ListAuditLogOptions,
+  LlmUsageLogRecord,
   LlmUsageRecord,
   SaveRequestInput,
   SavedRequestRecord,
@@ -70,6 +77,7 @@ const FOLDER_SELECT = `SELECT ${FOLDER_SELECT_COLUMNS} FROM folders`;
 const REQUEST_SELECT = `SELECT ${REQUEST_SELECT_COLUMNS} FROM requests`;
 const AUDIT_LOG_SELECT = `SELECT ${AUDIT_LOG_SELECT_COLUMNS} FROM audit_log`;
 const LLM_USAGE_SELECT = `SELECT ${LLM_USAGE_SELECT_COLUMNS} FROM llm_usage`;
+const LLM_USAGE_LOG_SELECT = `SELECT ${LLM_USAGE_LOG_SELECT_COLUMNS} FROM llm_usage_log`;
 
 /**
  * MySQL-backed database implementation.
@@ -1332,6 +1340,71 @@ export class MysqlDatabase implements IDatabase {
     }
 
     return usage;
+  }
+
+  /**
+   * Inserts a per-request LLM usage log entry.
+   *
+   * @param input - Usage details for one successful completion step.
+   */
+  async createLlmUsageLog(input: CreateLlmUsageLogInput): Promise<LlmUsageLogRecord> {
+    const id = randomUUID();
+    const now = new Date();
+
+    await this.executeStatement(
+      `INSERT INTO llm_usage_log (
+        id,
+        user_id,
+        api_token_id,
+        period,
+        model,
+        provider,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        is_new_turn,
+        had_tool_calls,
+        message_count,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.userId,
+        input.apiTokenId,
+        input.period,
+        input.model,
+        input.provider,
+        input.promptTokens,
+        input.completionTokens,
+        input.totalTokens,
+        input.isNewTurn ? 1 : 0,
+        input.hadToolCalls ? 1 : 0,
+        input.messageCount,
+        now
+      ]
+    );
+
+    const rows = await this.queryRows<LlmUsageLogSqlRow & RowDataPacket>(
+      `${LLM_USAGE_LOG_SELECT} WHERE id = ?`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new Error('LLM usage log not found after insert');
+    }
+
+    return mapLlmUsageLogSqlRow(row);
+  }
+
+  /**
+   * Lists all per-request LLM usage log entries, newest first.
+   */
+  async listLlmUsageLogs(): Promise<LlmUsageLogRecord[]> {
+    const rows = await this.queryRows<LlmUsageLogSqlRow & RowDataPacket>(
+      `${LLM_USAGE_LOG_SELECT} ORDER BY created_at DESC`
+    );
+
+    return rows.map(mapLlmUsageLogSqlRow);
   }
 
   /**

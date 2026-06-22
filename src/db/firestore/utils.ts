@@ -6,6 +6,7 @@ import type {
   EnvironmentRecord,
   FolderRecord,
   LlmUsageRecord,
+  LlmUsageLogRecord,
   SavedRequestRecord,
   UserRecord
 } from '#/db/types.js';
@@ -16,6 +17,7 @@ import type {
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
   FirestoreLlmUsageDocument,
+  FirestoreLlmUsageLogDocument,
   FirestoreRequestDocument,
   FirestoreUserDocument
 } from '#/db/firestore/types.js';
@@ -108,6 +110,34 @@ export function mapFirestoreLlmUsage(id: string, data: FirestoreLlmUsageDocument
     completionTokens: data.completionTokens,
     totalTokens: data.totalTokens,
     updatedAt: data.updatedAt
+  };
+}
+
+/**
+ * Maps a Firestore document to the shared {@link LlmUsageLogRecord} shape.
+ *
+ * @param id - Document identifier.
+ * @param data - Stored LLM usage log fields.
+ * @returns Normalized usage log record for application code.
+ */
+export function mapFirestoreLlmUsageLog(
+  id: string,
+  data: FirestoreLlmUsageLogDocument
+): LlmUsageLogRecord {
+  return {
+    id,
+    userId: data.userId,
+    apiTokenId: data.apiTokenId,
+    period: data.period,
+    model: data.model,
+    provider: data.provider as LlmUsageLogRecord['provider'],
+    promptTokens: data.promptTokens,
+    completionTokens: data.completionTokens,
+    totalTokens: data.totalTokens,
+    isNewTurn: data.isNewTurn,
+    hadToolCalls: data.hadToolCalls,
+    messageCount: data.messageCount,
+    createdAt: data.createdAt
   };
 }
 

@@ -39,6 +39,11 @@ export const AUDIT_LOG_COLLECTION = 'auditLog';
 export const LLM_USAGE_COLLECTION = 'llmUsage';
 
 /**
+ * Firestore collection name for per-request LLM usage log documents.
+ */
+export const LLM_USAGE_LOG_COLLECTION = 'llmUsageLog';
+
+/**
  * Maximum writes per Firestore batch commit.
  */
 export const WRITE_BATCH_LIMIT = 500;

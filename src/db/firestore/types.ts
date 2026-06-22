@@ -425,3 +425,68 @@ export interface FirestoreLlmUsageDocument {
    */
   updatedAt: Date;
 }
+
+/**
+ * Firestore document shape for per-request LLM usage log entries.
+ */
+export interface FirestoreLlmUsageLogDocument {
+  /**
+   * User who consumed tokens.
+   */
+  userId: string;
+
+  /**
+   * Bearer token used for the request, when known.
+   */
+  apiTokenId: string | null;
+
+  /**
+   * UTC calendar month key (`YYYY-MM`).
+   */
+  period: string;
+
+  /**
+   * Provider-specific model id sent to the API.
+   */
+  model: string;
+
+  /**
+   * LLM provider that served the request.
+   */
+  provider: string;
+
+  /**
+   * Prompt tokens billed for the step.
+   */
+  promptTokens: number;
+
+  /**
+   * Completion tokens billed for the step.
+   */
+  completionTokens: number;
+
+  /**
+   * Total tokens billed for the step.
+   */
+  totalTokens: number;
+
+  /**
+   * Whether the last message in the request was from the user.
+   */
+  isNewTurn: boolean;
+
+  /**
+   * Whether the model returned tool calls.
+   */
+  hadToolCalls: boolean;
+
+  /**
+   * Number of messages included in the request body.
+   */
+  messageCount: number;
+
+  /**
+   * When the completion step finished.
+   */
+  createdAt: Date;
+}

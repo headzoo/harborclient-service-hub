@@ -244,6 +244,31 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 `.trim();
 
 /**
+ * DDL for creating the llm_usage_log table when absent.
+ */
+export const LLM_USAGE_LOG_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS llm_usage_log (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  api_token_id TEXT REFERENCES api_tokens(id) ON DELETE SET NULL,
+  period TEXT NOT NULL,
+  model TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  prompt_tokens INT NOT NULL,
+  completion_tokens INT NOT NULL,
+  total_tokens INT NOT NULL,
+  is_new_turn BOOLEAN NOT NULL DEFAULT FALSE,
+  had_tool_calls BOOLEAN NOT NULL DEFAULT FALSE,
+  message_count INT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS llm_usage_log_user_created_at_idx ON llm_usage_log (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS llm_usage_log_period_idx ON llm_usage_log (period);
+`.trim();
+
+/**
  * Ordered Postgres migrations applied by {@link PostgresDatabase.migrate}.
  */
 export const POSTGRES_MIGRATIONS = [
@@ -265,5 +290,6 @@ export const POSTGRES_MIGRATIONS = [
   ENVIRONMENTS_BACKFILL_UPDATED_AT_SQL,
   FOLDERS_BACKFILL_UPDATED_AT_SQL,
   USERS_LLM_MIGRATION_SQL,
-  LLM_USAGE_MIGRATION_SQL
+  LLM_USAGE_MIGRATION_SQL,
+  LLM_USAGE_LOG_MIGRATION_SQL
 ];

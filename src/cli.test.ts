@@ -28,16 +28,19 @@ vi.mock('#/server/auth/throttle/createThrottleStore.js', () => ({
 
 import { createProgram } from '#/cli/program.js';
 import { collectionListCommand } from '#/cli/collectionCommand.js';
+import { llmListCommand } from '#/cli/llmCommand.js';
 import { migrateCommand } from '#/cli/migrateCommand.js';
 import {
   userCreateCommand,
   userListCommand,
+  userShowCommand,
   userTokenCreateCommand,
   userTokenListCommand,
   userTokenRevokeCommand
 } from '#/cli/userCommand.js';
 import { ConfigError, loadServerConfig } from '#/config/serverConfig.js';
 import type { IDatabase } from '#/db/index.js';
+import { currentUsagePeriod } from '#/server/llm/models.js';
 import { createStubDatabase } from '#/db/stubDatabase.js';
 import { defaultAuth } from '#/db/types.js';
 import type { IThrottleStore } from '#/server/auth/throttle/IThrottleStore.js';
@@ -210,6 +213,7 @@ describe('createProgram', () => {
     expect(output).toContain('start');
     expect(output).toContain('migrate');
     expect(output).toContain('collection');
+    expect(output).toContain('llm');
     expect(output).toContain('user');
     expect(output).toContain('--verbose');
     expect(output).toContain('--config');
@@ -460,6 +464,79 @@ ${sampleDbSection}${sampleRedisSection}`);
   });
 });
 
+describe('llm commands', () => {
+  it('lists stored LLM usage log entries', async () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}${sampleRedisSection}`);
+    const db = createMockDatabase();
+    db.listLlmUsageLogs = vi.fn().mockResolvedValue([
+      {
+        id: 'log-1',
+        userId: 'user-1',
+        apiTokenId: 'token-1',
+        period: '2026-06',
+        model: 'gpt-4o',
+        provider: 'openai',
+        promptTokens: 10,
+        completionTokens: 20,
+        totalTokens: 30,
+        isNewTurn: true,
+        hadToolCalls: false,
+        messageCount: 1,
+        createdAt: new Date('2026-06-01T12:00:00.000Z')
+      }
+    ]);
+    db.listUsers = vi.fn().mockResolvedValue([
+      {
+        id: 'user-1',
+        name: 'Alice',
+        role: 'user',
+        collectionAccess: ['*'],
+        environmentAccess: ['*'],
+        llmAccess: true,
+        llmModels: ['*'],
+        llmMonthlyTokenLimit: 100000,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        createdByUserId: null,
+        updatedByUserId: null
+      }
+    ]);
+    db.listApiTokens = vi.fn().mockResolvedValue([
+      {
+        id: 'token-1',
+        userId: 'user-1',
+        name: 'Alice laptop',
+        tokenHash: 'hash',
+        tokenPrefix: 'hbk_AbCd1234',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        lastUsedAt: null,
+        revokedAt: null,
+        createdByUserId: 'system-user-id',
+        updatedByUserId: 'system-user-id'
+      }
+    ]);
+    createDatabaseMock.mockReturnValue(db);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await llmListCommand({ config: configPath });
+
+    expect(db.connect).toHaveBeenCalledOnce();
+    expect(db.listLlmUsageLogs).toHaveBeenCalledOnce();
+    expect(db.listUsers).toHaveBeenCalledOnce();
+    expect(db.listApiTokens).toHaveBeenCalledOnce();
+    expect(db.disconnect).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith('- id: log-1');
+    expect(log).toHaveBeenCalledWith('  user: Alice (user-1)');
+    expect(log).toHaveBeenCalledWith('  api token: Alice laptop (token-1)');
+    expect(log).toHaveBeenCalledWith('  total tokens: 30');
+
+    log.mockRestore();
+  });
+});
+
 describe('user commands', () => {
   it('creates a user account', async () => {
     const configPath = writeConfig(`server:
@@ -523,6 +600,7 @@ ${sampleDbSection}${sampleRedisSection}`);
   host: 127.0.0.1
 ${sampleDbSection}${sampleRedisSection}`);
     const db = createMockDatabase();
+    const period = currentUsagePeriod();
     db.listUsers = vi.fn().mockResolvedValue([
       {
         id: 'user-1',
@@ -539,13 +617,67 @@ ${sampleDbSection}${sampleRedisSection}`);
         updatedByUserId: null
       }
     ]);
+    db.getLlmUsage = vi.fn().mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period,
+      promptTokens: 800,
+      completionTokens: 434,
+      totalTokens: 1234,
+      updatedAt: new Date('2026-01-01T00:00:00.000Z')
+    });
     createDatabaseMock.mockReturnValue(db);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await userListCommand({ config: configPath });
 
     expect(db.listUsers).toHaveBeenCalledOnce();
+    expect(db.getLlmUsage).toHaveBeenCalledWith('user-1', period);
     expect(log).toHaveBeenCalledWith('- id: user-1');
+    expect(log).toHaveBeenCalledWith(`  llm tokens used (${period}): 1234`);
+
+    log.mockRestore();
+  });
+
+  it('shows a single user with monthly usage', async () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}${sampleRedisSection}`);
+    const db = createMockDatabase();
+    const period = currentUsagePeriod();
+    db.findUserById = vi.fn().mockResolvedValue({
+      id: 'user-1',
+      name: 'Alice',
+      role: 'user',
+      collectionAccess: ['*'],
+      environmentAccess: ['*'],
+      llmAccess: true,
+      llmModels: ['*'],
+      llmMonthlyTokenLimit: 100000,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      createdByUserId: null,
+      updatedByUserId: null
+    });
+    db.getLlmUsage = vi.fn().mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period,
+      promptTokens: 800,
+      completionTokens: 434,
+      totalTokens: 1234,
+      updatedAt: new Date('2026-01-01T00:00:00.000Z')
+    });
+    createDatabaseMock.mockReturnValue(db);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await userShowCommand({ config: configPath, id: 'user-1' });
+
+    expect(db.findUserById).toHaveBeenCalledWith('user-1');
+    expect(db.getLlmUsage).toHaveBeenCalledWith('user-1', period);
+    expect(log).toHaveBeenCalledWith('- id: user-1');
+    expect(log).toHaveBeenCalledWith(`  llm tokens used (${period}): 1234`);
 
     log.mockRestore();
   });

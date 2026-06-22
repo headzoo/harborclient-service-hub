@@ -54,6 +54,23 @@ HarborClient keeps orchestrating the tool loop locally. Each LLM completion step
 
 Token usage is tracked per UTC calendar month. When a user exceeds their limit, new user messages are rejected with `402`. In-flight tool loops may finish because continuation steps (last message role `tool`) are still accepted.
 
+## Usage logging
+
+Team Hub stores LLM usage in two places:
+
+| Store | Purpose |
+| ----- | ------- |
+| `llm_usage` | Monthly rollup per user for limits and `team-hub user list` totals |
+| `llm_usage_log` | Per-request audit trail for each successful `POST /llm/chat/step` |
+
+Each log row records the user, API token (when present), UTC month, model, provider, token counts, whether the step started a new user turn, whether tool calls were returned, message count, and completion timestamp. Message content is not stored.
+
+Inspect log entries from the CLI:
+
+```bash
+team-hub llm list
+```
+
 ## Endpoints
 
 See [API Endpoints — LLM](./endpoints.md#llm-routes) for request and response shapes.

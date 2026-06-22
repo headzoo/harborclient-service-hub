@@ -38,6 +38,7 @@ team-hub -v start
 | `start` | Start the HTTP server |
 | `migrate` | Apply database schema migrations |
 | `collection list` | List stored collections |
+| `llm list` | List all per-request LLM usage log entries |
 | `user create` | Create a user account |
 | `user list` | List user accounts |
 | `user show <id>` | Show one user account |
@@ -117,6 +118,45 @@ When no collections exist:
 No collections found.
 ```
 
+## llm list
+
+List all per-request LLM usage log entries stored in `llm_usage_log`, newest first.
+
+```bash
+team-hub llm list
+team-hub llm list -c server.yaml
+```
+
+| Option | Required | Description |
+| ------ | -------- | ----------- |
+| _(none)_ | — | Uses global options only |
+
+Example output:
+
+```text
+- id: 550e8400-e29b-41d4-a716-446655440000
+  user: Alice (user-id)
+  api token: Alice laptop (token-id)
+  period: 2026-06
+  model: gpt-4o
+  provider: openai
+  prompt tokens: 10
+  completion tokens: 20
+  total tokens: 30
+  new turn: yes
+  tool calls: no
+  messages: 1
+  created: 2026-06-01T12:00:00.000Z
+```
+
+When no usage has been recorded:
+
+```text
+No LLM usage records found.
+```
+
+See [LLM Proxy — Usage logging](./llm.md#usage-logging) for how records are created.
+
 ## user
 
 Manage user accounts. User accounts have a role of `user` or `admin` and, for `user` accounts, collection and environment access lists. See [Authentication — Roles and access](./auth.md#roles-and-access) for the full permission model.
@@ -176,7 +216,7 @@ team-hub user list
 | ------ | -------- | ----------- |
 | _(none)_ | — | Uses global options only |
 
-Prints each user with id, name, role, access lists, and timestamps. When no users exist, prints `No users found.`
+Prints each user with id, name, role, access lists, LLM settings, current-month token usage (`llm tokens used (YYYY-MM)`), and timestamps. When no users exist, prints `No users found.`
 
 ### user show
 
@@ -190,7 +230,7 @@ team-hub user show <user-id>
 | ----------------- | -------- | ----------- |
 | `<id>` | Yes | User identifier |
 
-Prints the same fields as `user list` for one account. When the id is not found, prints `No user found with id <user-id>.`
+Prints the same fields as `user list` for one account, including current-month LLM token usage (`llm tokens used (YYYY-MM)`). When the id is not found, prints `No user found with id <user-id>.`
 
 ### user update
 

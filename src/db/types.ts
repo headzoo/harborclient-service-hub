@@ -333,6 +333,141 @@ export interface LlmUsageRecord {
 }
 
 /**
+ * LLM provider id stored on per-request usage log rows.
+ */
+export type LlmUsageLogProvider = 'openai' | 'claude' | 'gemini';
+
+/**
+ * Persisted per-request LLM usage log entry.
+ */
+export interface LlmUsageLogRecord {
+  /**
+   * Stable identifier for the log row.
+   */
+  id: string;
+
+  /**
+   * User who consumed tokens.
+   */
+  userId: string;
+
+  /**
+   * Bearer token used for the request, when known.
+   */
+  apiTokenId: string | null;
+
+  /**
+   * UTC calendar month key (`YYYY-MM`).
+   */
+  period: string;
+
+  /**
+   * Provider-specific model id sent to the API.
+   */
+  model: string;
+
+  /**
+   * LLM provider that served the request.
+   */
+  provider: LlmUsageLogProvider;
+
+  /**
+   * Prompt tokens billed for the step.
+   */
+  promptTokens: number;
+
+  /**
+   * Completion tokens billed for the step.
+   */
+  completionTokens: number;
+
+  /**
+   * Total tokens billed for the step.
+   */
+  totalTokens: number;
+
+  /**
+   * Whether the last message in the request was from the user.
+   */
+  isNewTurn: boolean;
+
+  /**
+   * Whether the model returned tool calls.
+   */
+  hadToolCalls: boolean;
+
+  /**
+   * Number of messages included in the request body.
+   */
+  messageCount: number;
+
+  /**
+   * When the completion step finished.
+   */
+  createdAt: Date;
+}
+
+/**
+ * Input for inserting a per-request LLM usage log row.
+ */
+export interface CreateLlmUsageLogInput {
+  /**
+   * User who consumed tokens.
+   */
+  userId: string;
+
+  /**
+   * Bearer token used for the request, when known.
+   */
+  apiTokenId: string | null;
+
+  /**
+   * UTC calendar month key (`YYYY-MM`).
+   */
+  period: string;
+
+  /**
+   * Provider-specific model id sent to the API.
+   */
+  model: string;
+
+  /**
+   * LLM provider that served the request.
+   */
+  provider: LlmUsageLogProvider;
+
+  /**
+   * Prompt tokens billed for the step.
+   */
+  promptTokens: number;
+
+  /**
+   * Completion tokens billed for the step.
+   */
+  completionTokens: number;
+
+  /**
+   * Total tokens billed for the step.
+   */
+  totalTokens: number;
+
+  /**
+   * Whether the last message in the request was from the user.
+   */
+  isNewTurn: boolean;
+
+  /**
+   * Whether the model returned tool calls.
+   */
+  hadToolCalls: boolean;
+
+  /**
+   * Number of messages included in the request body.
+   */
+  messageCount: number;
+}
+
+/**
  * Supported HTTP request methods.
  */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';

@@ -9,6 +9,7 @@ import {
   ENVIRONMENTS_COLLECTION,
   FOLDERS_COLLECTION,
   LLM_USAGE_COLLECTION,
+  LLM_USAGE_LOG_COLLECTION,
   REQUESTS_COLLECTION,
   USERS_COLLECTION,
   WRITE_BATCH_LIMIT
@@ -23,6 +24,7 @@ import type {
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
   FirestoreLlmUsageDocument,
+  FirestoreLlmUsageLogDocument,
   FirestoreRequestDocument,
   FirestoreUserDocument
 } from '#/db/firestore/types.js';
@@ -33,6 +35,7 @@ import {
   mapFirestoreEnvironment,
   mapFirestoreFolder,
   mapFirestoreLlmUsage,
+  mapFirestoreLlmUsageLog,
   mapFirestoreRequest,
   mapFirestoreUser
 } from '#/db/firestore/utils.js';
@@ -46,10 +49,12 @@ import type {
   AuthConfig,
   CollectionRecord,
   CreateUserInput,
+  CreateLlmUsageLogInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   ListAuditLogOptions,
+  LlmUsageLogRecord,
   LlmUsageRecord,
   SaveRequestInput,
   SavedRequestRecord,
@@ -1196,6 +1201,48 @@ export class FirestoreDatabase implements IDatabase {
     }
 
     return usage;
+  }
+
+  /**
+   * Inserts a per-request LLM usage log entry.
+   *
+   * @param input - Usage details for one successful completion step.
+   */
+  async createLlmUsageLog(input: CreateLlmUsageLogInput): Promise<LlmUsageLogRecord> {
+    const id = randomUUID();
+    const now = new Date();
+    const data: FirestoreLlmUsageLogDocument = {
+      userId: input.userId,
+      apiTokenId: input.apiTokenId,
+      period: input.period,
+      model: input.model,
+      provider: input.provider,
+      promptTokens: input.promptTokens,
+      completionTokens: input.completionTokens,
+      totalTokens: input.totalTokens,
+      isNewTurn: input.isNewTurn,
+      hadToolCalls: input.hadToolCalls,
+      messageCount: input.messageCount,
+      createdAt: now
+    };
+
+    await this.requireClient().collection(LLM_USAGE_LOG_COLLECTION).doc(id).set(data);
+
+    return mapFirestoreLlmUsageLog(id, data);
+  }
+
+  /**
+   * Lists all per-request LLM usage log entries, newest first.
+   */
+  async listLlmUsageLogs(): Promise<LlmUsageLogRecord[]> {
+    const snapshot = await this.requireClient()
+      .collection(LLM_USAGE_LOG_COLLECTION)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    return snapshot.docs.map((doc) =>
+      mapFirestoreLlmUsageLog(doc.id, doc.data() as FirestoreLlmUsageLogDocument)
+    );
   }
 
   /**

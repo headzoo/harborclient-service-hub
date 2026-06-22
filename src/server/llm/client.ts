@@ -225,17 +225,17 @@ function parseCompletionResponse(json: Record<string, unknown>): LlmCompletionRe
   const rawToolCalls = message.tool_calls;
   const toolCalls = Array.isArray(rawToolCalls)
     ? rawToolCalls
-      .filter((call): call is Record<string, unknown> => call != null && typeof call === 'object')
-      .filter((call) => call.type === 'function')
-      .map((call) => {
-        const fn = call.function as Record<string, unknown> | undefined;
-        return {
-          id: String(call.id ?? ''),
-          name: String(fn?.name ?? ''),
-          arguments: String(fn?.arguments ?? '')
-        };
-      })
-      .filter((call) => call.id && call.name)
+        .filter((call): call is Record<string, unknown> => call != null && typeof call === 'object')
+        .filter((call) => call.type === 'function')
+        .map((call) => {
+          const fn = call.function as Record<string, unknown> | undefined;
+          return {
+            id: String(call.id ?? ''),
+            name: String(fn?.name ?? ''),
+            arguments: String(fn?.arguments ?? '')
+          };
+        })
+        .filter((call) => call.id && call.name)
     : undefined;
 
   const content = typeof message.content === 'string' ? message.content : null;

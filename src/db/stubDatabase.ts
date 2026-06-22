@@ -49,6 +49,8 @@ export function createStubDatabase(): Mocked<IDatabase> {
     reorderRequests: vi.fn(),
     moveRequest: vi.fn(),
     getLlmUsage: vi.fn(),
-    addLlmUsage: vi.fn()
+    addLlmUsage: vi.fn(),
+    createLlmUsageLog: vi.fn(),
+    listLlmUsageLogs: vi.fn().mockResolvedValue([])
   };
 }

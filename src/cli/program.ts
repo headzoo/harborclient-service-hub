@@ -4,6 +4,7 @@ import {
   registerCollectionCommand,
   type CollectionCommandOptions
 } from '#/cli/collectionCommand.js';
+import { registerLlmCommand, type LlmCommandOptions } from '#/cli/llmCommand.js';
 import { registerMigrateCommand, type MigrateCommandOptions } from '#/cli/migrateCommand.js';
 import {
   registerUserCommand,
@@ -32,6 +33,13 @@ export interface ProgramDependencies {
    */
   collectionCommand?: {
     list?: (options: CollectionCommandOptions) => Promise<void>;
+  };
+
+  /**
+   * Optional overrides for LLM subcommand handlers (used in tests).
+   */
+  llmCommand?: {
+    list?: (options: LlmCommandOptions) => Promise<void>;
   };
 
   /**
@@ -75,6 +83,7 @@ export function createProgram(version: string, deps: ProgramDependencies = {}): 
   registerStartCommand(program, deps.startCommand);
   registerMigrateCommand(program, deps.migrateCommand);
   registerCollectionCommand(program, deps.collectionCommand);
+  registerLlmCommand(program, deps.llmCommand);
   registerUserCommand(program, deps.userCommand);
 
   return program;

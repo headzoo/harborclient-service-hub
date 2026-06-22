@@ -12,7 +12,9 @@ import type {
   UpdateUserInput,
   UserRecord,
   Variable,
-  LlmUsageRecord
+  LlmUsageRecord,
+  CreateLlmUsageLogInput,
+  LlmUsageLogRecord
 } from '#/db/types.js';
 import type { ApiTokenRecord } from '#/db/types.js';
 
@@ -379,4 +381,16 @@ export interface IDatabase {
     promptTokens: number,
     completionTokens: number
   ): Promise<LlmUsageRecord>;
+
+  /**
+   * Inserts a per-request LLM usage log entry.
+   *
+   * @param input - Usage details for one successful completion step.
+   */
+  createLlmUsageLog(input: CreateLlmUsageLogInput): Promise<LlmUsageLogRecord>;
+
+  /**
+   * Lists all per-request LLM usage log entries, newest first.
+   */
+  listLlmUsageLogs(): Promise<LlmUsageLogRecord[]>;
 }

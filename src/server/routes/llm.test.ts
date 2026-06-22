@@ -137,6 +137,21 @@ describe('llm routes', () => {
       totalTokens: 1003,
       updatedAt: new Date('2026-06-01T00:00:00.000Z')
     });
+    db.createLlmUsageLog.mockResolvedValue({
+      id: 'log-1',
+      userId: 'user-1',
+      apiTokenId: 'token-1',
+      period: '2026-06',
+      model: 'gpt-4o',
+      provider: 'openai',
+      promptTokens: 1,
+      completionTokens: 2,
+      totalTokens: 3,
+      isNewTurn: false,
+      hadToolCalls: false,
+      messageCount: 1,
+      createdAt: new Date('2026-06-01T00:00:00.000Z')
+    });
 
     const app = await createProtectedTestApp({
       db,
@@ -163,6 +178,95 @@ describe('llm routes', () => {
     expect(response.statusCode).toBe(200);
     expect(runLlmCompletion).toHaveBeenCalledOnce();
     expect(db.addLlmUsage).toHaveBeenCalledWith('user-1', expect.any(String), 1, 2);
+    expect(db.createLlmUsageLog).toHaveBeenCalledWith({
+      userId: 'user-1',
+      apiTokenId: 'token-1',
+      period: expect.any(String),
+      model: 'gpt-4o',
+      provider: 'openai',
+      promptTokens: 1,
+      completionTokens: 2,
+      totalTokens: 3,
+      isNewTurn: false,
+      hadToolCalls: false,
+      messageCount: 1
+    });
+    runLlmCompletion.mockRestore();
+    await app.close();
+  });
+
+  it('logs per-request usage for successful new-turn completions', async () => {
+    const runLlmCompletion = vi.spyOn(llmClient, 'runLlmCompletion').mockResolvedValue({
+      content: null,
+      toolCalls: [{ id: 'call-1', name: 'listCollections', arguments: '{}' }],
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 }
+    });
+
+    const db = createStubDatabase();
+    db.getLlmUsage.mockResolvedValue(null);
+    db.addLlmUsage.mockResolvedValue({
+      id: 'usage-1',
+      userId: 'user-1',
+      period: '2026-06',
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
+      updatedAt: new Date('2026-06-01T00:00:00.000Z')
+    });
+    db.createLlmUsageLog.mockResolvedValue({
+      id: 'log-1',
+      userId: 'user-1',
+      apiTokenId: 'token-1',
+      period: '2026-06',
+      model: 'gpt-4o',
+      provider: 'openai',
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
+      isNewTurn: true,
+      hadToolCalls: true,
+      messageCount: 2,
+      createdAt: new Date('2026-06-01T00:00:00.000Z')
+    });
+
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      llm: sampleLlmConfig,
+      user: {
+        ...sampleUserRecord,
+        llmAccess: true,
+        llmModels: ['*']
+      }
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/llm/chat/step',
+      headers: authHeader(),
+      payload: {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'assistant', content: 'Hi' },
+          { role: 'user', content: 'Hello' }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(db.createLlmUsageLog).toHaveBeenCalledWith({
+      userId: 'user-1',
+      apiTokenId: 'token-1',
+      period: expect.any(String),
+      model: 'gpt-4o',
+      provider: 'openai',
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
+      isNewTurn: true,
+      hadToolCalls: true,
+      messageCount: 2
+    });
     runLlmCompletion.mockRestore();
     await app.close();
   });

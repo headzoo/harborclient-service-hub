@@ -7,6 +7,7 @@ import { canUseLlm, isLlmModelAllowed, isOverMonthlyLimit } from '#/server/auth/
 import { runLlmCompletion } from '#/server/llm/client.js';
 import {
   currentUsagePeriod,
+  getHubModelById,
   isHubModelOffered,
   listHubOfferedModels
 } from '#/server/llm/models.js';
@@ -191,12 +192,31 @@ export async function registerLlmRoutes(
         systemPrompt
       });
 
+      const catalogModel = getHubModelById(model);
+      if (!catalogModel) {
+        throw new Error(`Unknown hub model: ${model}`);
+      }
+
       await options.db.addLlmUsage(
         user.id,
         period,
         result.usage.promptTokens,
         result.usage.completionTokens
       );
+
+      await options.db.createLlmUsageLog({
+        userId: user.id,
+        apiTokenId: request.apiToken?.id ?? null,
+        period,
+        model,
+        provider: catalogModel.provider,
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        isNewTurn,
+        hadToolCalls: Boolean(result.toolCalls && result.toolCalls.length > 0),
+        messageCount: messages.length
+      });
 
       return reply.send({
         content: result.content,
