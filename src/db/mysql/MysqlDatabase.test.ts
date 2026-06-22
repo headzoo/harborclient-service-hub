@@ -154,6 +154,14 @@ describe('MysqlDatabase api tokens', () => {
       expect.stringContaining('CREATE TABLE IF NOT EXISTS requests'),
       []
     );
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS users'),
+      []
+    );
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('ADD COLUMN IF NOT EXISTS user_id'),
+      []
+    );
 
     await db.disconnect();
   });
@@ -163,6 +171,7 @@ describe('MysqlDatabase api tokens', () => {
 
     await expect(
       db.createApiToken({
+        userId: 'user-1',
         id: 'id',
         name: 'name',
         tokenHash: 'hash',

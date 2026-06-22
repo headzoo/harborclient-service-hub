@@ -10,6 +10,11 @@ export interface ApiTokenSqlRow {
   id: string;
 
   /**
+   * Owning user identifier column.
+   */
+  user_id: string | null;
+
+  /**
    * Human-readable token label.
    */
   name: string;
@@ -47,8 +52,13 @@ export interface ApiTokenSqlRow {
  * @returns Normalized token record for application code.
  */
 export function mapApiTokenSqlRow(row: ApiTokenSqlRow): ApiTokenRecord {
+  if (!row.user_id) {
+    throw new Error(`API token ${row.id} is missing a user_id`);
+  }
+
   return {
     id: row.id,
+    userId: row.user_id,
     name: row.name,
     tokenHash: row.token_hash,
     tokenPrefix: row.token_prefix,

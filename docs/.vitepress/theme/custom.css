@@ -11,6 +11,67 @@
   display: inline-block;
 }
 
+.vp-doc img[alt='HarborClient Server'] {
+  display: block;
+  max-width: min(420px, 100%);
+  height: auto;
+  margin: 0 0 1.5rem;
+}
+
+/* Brand mark: full width of the sidebar column (see SidebarBrand.vue) */
+.docs-sidebar-brand {
+  display: block;
+  margin: 0 -32px 20px;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--vp-c-divider);
+  box-sizing: border-box;
+  width: calc(100% + 64px);
+}
+
+.docs-sidebar-brand img {
+  display: block;
+  width: 95%;
+  height: auto;
+}
+
+/*
+ * Desktop: full-width logo flush with search box top; sticky while nav scrolls.
+ */
+@media (min-width: 960px) {
+  .VPNavBarTitle {
+    display: none;
+  }
+
+  .VPSidebar {
+    padding-top: 12px !important;
+  }
+
+  .VPSidebar .curtain {
+    display: none !important;
+  }
+
+  .docs-sidebar-brand {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--vp-sidebar-bg-color);
+  }
+}
+
+/*
+ * Mobile: sidebar is a drawer; show compact themeConfig.logo in nav bar instead.
+ */
+@media (max-width: 959px) {
+  .docs-sidebar-brand {
+    display: none;
+  }
+
+  .VPNavBarTitle img.logo {
+    height: 36px;
+    width: auto;
+  }
+}
+
 @media (min-width: 768px) {
   .VPNavBarSearch {
     flex: 1 1 auto;

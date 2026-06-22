@@ -39,7 +39,7 @@ export default defineConfig({
         const isAlreadyLinked =
           tokens[idx - 1]?.type === 'link_open' && tokens[idx + 1]?.type === 'link_close';
 
-        if (!src || isAlreadyLinked) {
+        if (!src || isAlreadyLinked || src.endsWith('/images/logo.png')) {
           return renderedImage;
         }
 
@@ -52,8 +52,11 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: false,
-    siteTitle: true,
+    logo: {
+      src: '/images/logo.png',
+      alt: 'HarborClient Server',
+    },
+    siteTitle: false,
     nav: [
       {
         text: `v${pkg.version}`,

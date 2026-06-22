@@ -12,8 +12,9 @@ describe('hashToken', () => {
 
 describe('generateApiToken', () => {
   it('creates a record with hbk prefix and stored hash', () => {
-    const { record, secret } = generateApiToken('Alice laptop');
+    const { record, secret } = generateApiToken('user-1', 'Alice laptop');
 
+    expect(record.userId).toBe('user-1');
     expect(record.name).toBe('Alice laptop');
     expect(secret.startsWith('hbk_')).toBe(true);
     expect(record.tokenPrefix.startsWith('hbk_')).toBe(true);

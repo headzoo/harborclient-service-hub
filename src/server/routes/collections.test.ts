@@ -4,6 +4,7 @@ import { defaultAuth } from '#/db/types.js';
 import {
   authHeader,
   createProtectedTestApp,
+  sampleUserRecord,
   validBearerToken
 } from '#/server/routes/test/createTestApp.js';
 
@@ -72,6 +73,60 @@ describe('collection routes', () => {
     expect(response.statusCode).toBe(200);
     expect(db.createCollection).toHaveBeenCalledWith('Shared API');
     expect(response.json().name).toBe('Shared API');
+
+    await app.close();
+  });
+
+  it('returns 403 for admin users on collection routes', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: {
+        ...sampleUserRecord,
+        role: 'admin',
+        collectionAccess: [],
+        environmentAccess: []
+      }
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/collections',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+
+    await app.close();
+  });
+
+  it('filters collections for scoped users', async () => {
+    const db = createStubDatabase();
+    db.listCollections.mockResolvedValue([
+      sampleCollection,
+      { ...sampleCollection, id: 'collection-2', name: 'Other API' }
+    ]);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: {
+        ...sampleUserRecord,
+        collectionAccess: ['collection-1'],
+        environmentAccess: ['env-1']
+      }
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/collections',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().collections).toHaveLength(1);
+    expect(response.json().collections[0].id).toBe('collection-1');
 
     await app.close();
   });

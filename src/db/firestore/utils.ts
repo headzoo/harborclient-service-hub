@@ -3,14 +3,16 @@ import type {
   CollectionRecord,
   EnvironmentRecord,
   FolderRecord,
-  SavedRequestRecord
+  SavedRequestRecord,
+  UserRecord
 } from '#/db/types.js';
 import type {
   FirestoreApiTokenDocument,
   FirestoreCollectionDocument,
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
-  FirestoreRequestDocument
+  FirestoreRequestDocument,
+  FirestoreUserDocument
 } from '#/db/firestore/types.js';
 
 /**
@@ -21,14 +23,38 @@ import type {
  * @returns Normalized token record for application code.
  */
 export function mapFirestoreApiToken(id: string, data: FirestoreApiTokenDocument): ApiTokenRecord {
+  if (!data.userId) {
+    throw new Error(`API token ${id} is missing a userId`);
+  }
+
   return {
     id,
+    userId: data.userId,
     name: data.name,
     tokenHash: data.tokenHash,
     tokenPrefix: data.tokenPrefix,
     createdAt: data.createdAt,
     lastUsedAt: data.lastUsedAt,
     revokedAt: data.revokedAt
+  };
+}
+
+/**
+ * Maps a Firestore document to the shared {@link UserRecord} shape.
+ *
+ * @param id - Document identifier.
+ * @param data - Stored user fields.
+ * @returns Normalized user record for application code.
+ */
+export function mapFirestoreUser(id: string, data: FirestoreUserDocument): UserRecord {
+  return {
+    id,
+    name: data.name,
+    role: data.role,
+    collectionAccess: data.collectionAccess,
+    environmentAccess: data.environmentAccess,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt
   };
 }
 

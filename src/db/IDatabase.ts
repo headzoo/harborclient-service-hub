@@ -1,11 +1,14 @@
 import type {
   AuthConfig,
   CollectionRecord,
+  CreateUserInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   SaveRequestInput,
   SavedRequestRecord,
+  UpdateUserInput,
+  UserRecord,
   Variable
 } from '#/db/types.js';
 import type { ApiTokenRecord } from '#/db/types.js';
@@ -32,6 +35,58 @@ export interface IDatabase {
   migrate(): Promise<void>;
 
   /**
+   * Creates a new user account.
+   *
+   * @param input - User fields to persist.
+   * @returns The newly created user record.
+   */
+  createUser(input: CreateUserInput): Promise<UserRecord>;
+
+  /**
+   * Finds a user by stable identifier.
+   *
+   * @param id - User identifier to look up.
+   * @returns Matching user record, or null when not found.
+   */
+  findUserById(id: string): Promise<UserRecord | null>;
+
+  /**
+   * Finds a user by unique display name.
+   *
+   * @param name - User name to look up.
+   * @returns Matching user record, or null when not found.
+   */
+  findUserByName(name: string): Promise<UserRecord | null>;
+
+  /**
+   * Lists all user accounts ordered by name.
+   */
+  listUsers(): Promise<UserRecord[]>;
+
+  /**
+   * Updates an existing user account.
+   *
+   * @param id - User identifier to update.
+   * @param input - Partial fields to apply.
+   * @returns The updated user record.
+   */
+  updateUser(id: string, input: UpdateUserInput): Promise<UserRecord>;
+
+  /**
+   * Deletes a user account and revokes all of their API tokens.
+   *
+   * @param id - User identifier to delete.
+   */
+  deleteUser(id: string): Promise<void>;
+
+  /**
+   * Assigns legacy API tokens without an owner to the bootstrap user.
+   *
+   * Idempotent: no-op when no orphan tokens exist.
+   */
+  migrateOrphanTokensToBootstrapUser(): Promise<void>;
+
+  /**
    * Persists a newly generated API token record.
    *
    * @param record - Token metadata including the stored hash (not the raw secret).
@@ -50,6 +105,13 @@ export interface IDatabase {
    * Returns all API token records ordered newest-first for operator listing.
    */
   listApiTokens(): Promise<ApiTokenRecord[]>;
+
+  /**
+   * Returns API tokens owned by a specific user ordered newest-first.
+   *
+   * @param userId - Owning user identifier.
+   */
+  listApiTokensByUserId(userId: string): Promise<ApiTokenRecord[]>;
 
   /**
    * Soft-revokes a token by id.
@@ -152,6 +214,14 @@ export interface IDatabase {
   listRequests(collectionId: string): Promise<SavedRequestRecord[]>;
 
   /**
+   * Finds a saved request by id.
+   *
+   * @param id - Request identifier to look up.
+   * @returns Matching request record, or null when not found.
+   */
+  findRequestById(id: string): Promise<SavedRequestRecord | null>;
+
+  /**
    * Inserts a new request or updates an existing one.
    *
    * @param input - Request fields to persist.
@@ -173,6 +243,14 @@ export interface IDatabase {
    * @returns Folders ordered by sort_order then name.
    */
   listFolders(collectionId: string): Promise<FolderRecord[]>;
+
+  /**
+   * Finds a folder by id.
+   *
+   * @param id - Folder identifier to look up.
+   * @returns Matching folder record, or null when not found.
+   */
+  findFolderById(id: string): Promise<FolderRecord | null>;
 
   /**
    * Creates a new folder in a collection.

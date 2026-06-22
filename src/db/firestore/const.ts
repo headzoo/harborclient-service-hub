@@ -1,4 +1,9 @@
 /**
+ * Firestore collection name for user account documents.
+ */
+export const USERS_COLLECTION = 'users';
+
+/**
  * Firestore collection name for API token documents.
  */
 export const API_TOKENS_COLLECTION = 'apiTokens';

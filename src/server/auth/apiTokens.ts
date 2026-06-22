@@ -19,10 +19,14 @@ export function hashToken(token: string): string {
 /**
  * Generates a new API token record and its one-time plaintext secret.
  *
+ * @param userId - Owning user account identifier.
  * @param name - Human-readable label for operator listings.
  * @returns Persistable record (hash only) and the secret shown once at creation.
  */
-export function generateApiToken(name: string): { record: ApiTokenRecord; secret: string } {
+export function generateApiToken(
+  userId: string,
+  name: string
+): { record: ApiTokenRecord; secret: string } {
   const secretSuffix = randomBytes(32).toString('base64url');
   const secret = `${TOKEN_PREFIX}${secretSuffix}`;
   const tokenPrefix = `${TOKEN_PREFIX}${secretSuffix.slice(0, 8)}`;
@@ -30,6 +34,7 @@ export function generateApiToken(name: string): { record: ApiTokenRecord; secret
 
   const record: ApiTokenRecord = {
     id: randomUUID(),
+    userId,
     name,
     tokenHash: hashToken(secret),
     tokenPrefix,

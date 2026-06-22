@@ -61,6 +61,7 @@ describe('request routes', () => {
 
   it('deletes a saved request by id', async () => {
     const db = createStubDatabase();
+    db.findRequestById.mockResolvedValue(sampleRequest);
     db.deleteRequest.mockResolvedValue(undefined);
     const app = await createProtectedTestApp({ db, withValidAuth: true });
 

@@ -1,4 +1,4 @@
-import type { AuthConfig, KeyValue, Variable } from '#/db/types.js';
+import type { AuthConfig, KeyValue, UserRole, Variable } from '#/db/types.js';
 
 /**
  * Validated configuration for a Firestore database connection.
@@ -16,9 +16,49 @@ export interface FirestoreDatabaseConfig {
 }
 
 /**
+ * Firestore document shape for persisted user accounts.
+ */
+export interface FirestoreUserDocument {
+  /**
+   * Unique display name for the account.
+   */
+  name: string;
+
+  /**
+   * Role assigned to the account.
+   */
+  role: UserRole;
+
+  /**
+   * Collection ids the user may access, or `['*']` for all collections.
+   */
+  collectionAccess: string[];
+
+  /**
+   * Environment ids the user may access, or `['*']` for all environments.
+   */
+  environmentAccess: string[];
+
+  /**
+   * When the user account was created.
+   */
+  createdAt: Date;
+
+  /**
+   * When the user account was last updated.
+   */
+  updatedAt: Date;
+}
+
+/**
  * Firestore document shape for persisted API tokens.
  */
 export interface FirestoreApiTokenDocument {
+  /**
+   * Owning user identifier.
+   */
+  userId: string;
+
   /**
    * Human-readable token label.
    */

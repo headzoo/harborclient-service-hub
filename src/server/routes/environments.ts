@@ -1,7 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IDatabase } from '#/db/IDatabase.js';
+import {
+  canAccessEnvironment,
+  canCreateEnvironment,
+  canUseDataApi,
+  filterAccessibleEnvironments
+} from '#/server/auth/accessControl.js';
 import { handleDbError } from '#/server/routes/errors.js';
+import { denyUnlessAllowed, requireAuthenticatedUser } from '#/server/routes/authorize.js';
 import { errorResponseSchema, idParamSchema } from '#/server/routes/schemas/common.js';
 import {
   createEnvironmentBodySchema,
@@ -35,11 +42,18 @@ export async function registerEnvironmentRoutes(
     /**
      * Lists all environments ordered by name.
      */
-    handler: async (_request, reply) => {
+    handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseDataApi(user))) {
+          return;
+        }
+
         const environments = await db.listEnvironments();
         return reply.send({
-          environments: environments.map((environment) => serializeEnvironment(environment))
+          environments: filterAccessibleEnvironments(user, environments).map((environment) =>
+            serializeEnvironment(environment)
+          )
         });
       } catch (error) {
         if (handleDbError(reply, error)) {
@@ -66,6 +80,11 @@ export async function registerEnvironmentRoutes(
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseDataApi(user) && canCreateEnvironment(user))) {
+          return;
+        }
+
         const environment = await db.createEnvironment(request.body.name);
         return reply.send(serializeEnvironment(environment));
       } catch (error) {
@@ -95,6 +114,16 @@ export async function registerEnvironmentRoutes(
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessEnvironment(user, request.params.id)
+          )
+        ) {
+          return;
+        }
+
         const environment = await db.updateEnvironment(
           request.params.id,
           request.body.name,
@@ -126,6 +155,16 @@ export async function registerEnvironmentRoutes(
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessEnvironment(user, request.params.id)
+          )
+        ) {
+          return;
+        }
+
         await db.deleteEnvironment(request.params.id);
         return reply.code(204).send(null);
       } catch (error) {

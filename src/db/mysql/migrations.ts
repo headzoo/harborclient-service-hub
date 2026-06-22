@@ -85,6 +85,29 @@ CREATE TABLE IF NOT EXISTS requests (
 `.trim();
 
 /**
+ * DDL for creating the users table when absent.
+ */
+export const USERS_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(36) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  role VARCHAR(16) NOT NULL,
+  collection_access LONGTEXT NOT NULL,
+  environment_access LONGTEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+)
+`.trim();
+
+/**
+ * Adds the owning user reference to api_tokens when upgrading existing databases.
+ */
+export const API_TOKENS_USER_ID_MIGRATION_SQL = `
+ALTER TABLE api_tokens
+  ADD COLUMN IF NOT EXISTS user_id VARCHAR(36) NULL
+`.trim();
+
+/**
  * Default auth JSON for MySQL collection/request inserts.
  */
 export const MYSQL_DEFAULT_AUTH_JSON = DEFAULT_AUTH_JSON;
@@ -97,5 +120,7 @@ export const MYSQL_MIGRATIONS = [
   COLLECTIONS_MIGRATION_SQL,
   ENVIRONMENTS_MIGRATION_SQL,
   FOLDERS_MIGRATION_SQL,
-  REQUESTS_MIGRATION_SQL
+  REQUESTS_MIGRATION_SQL,
+  USERS_MIGRATION_SQL,
+  API_TOKENS_USER_ID_MIGRATION_SQL
 ];

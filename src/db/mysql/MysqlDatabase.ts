@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise';
 import { mapApiTokenSqlRow, type ApiTokenSqlRow } from '#/db/apiTokenRows.js';
+import { BOOTSTRAP_USER_NAME } from '#/db/bootstrapUsers.js';
 import {
   mapCollectionSqlRow,
   mapEnvironmentSqlRow,
@@ -16,15 +17,19 @@ import { MYSQL_DEFAULT_AUTH_JSON, MYSQL_MIGRATIONS } from '#/db/mysql/migrations
 import { mysqlConfigSchema } from '#/db/mysql/schemas.js';
 import type { MysqlDatabaseConfig } from '#/db/mysql/types.js';
 import { trimRequiredName } from '#/db/trimRequiredName.js';
+import { mapUserSqlRow, serializeAccessList, type UserSqlRow } from '#/db/userRows.js';
 import type {
   ApiTokenRecord,
   AuthConfig,
   CollectionRecord,
+  CreateUserInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   SaveRequestInput,
   SavedRequestRecord,
+  UpdateUserInput,
+  UserRecord,
   Variable
 } from '#/db/types.js';
 import { formatZodError } from '#/db/validation.js';
@@ -32,6 +37,18 @@ import { formatZodError } from '#/db/validation.js';
 const COLLECTION_SELECT =
   'SELECT id, name, variables, headers, auth, pre_request_script, post_request_script, created_at FROM collections';
 const ENVIRONMENT_SELECT = 'SELECT id, name, variables, created_at FROM environments';
+const USER_SELECT =
+  'SELECT id, name, role, collection_access, environment_access, created_at, updated_at FROM users';
+const API_TOKEN_SELECT = `SELECT
+  id,
+  user_id,
+  name,
+  token_hash,
+  token_prefix,
+  created_at,
+  last_used_at,
+  revoked_at
+FROM api_tokens`;
 
 /**
  * MySQL-backed database implementation.
@@ -47,7 +64,7 @@ export class MysqlDatabase implements IDatabase {
    *
    * @param config - Parsed MySQL connection settings.
    */
-  constructor(private readonly config: MysqlDatabaseConfig) {}
+  constructor(private readonly config: MysqlDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link MysqlDatabase}.
@@ -113,6 +130,184 @@ export class MysqlDatabase implements IDatabase {
     for (const sql of MYSQL_MIGRATIONS) {
       await this.executeStatement(sql);
     }
+
+    await this.migrateOrphanTokensToBootstrapUser();
+  }
+
+  /**
+   * Creates a new user account with the given role and access lists.
+   *
+   * @param input - User fields to persist.
+   */
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const trimmedName = trimRequiredName(input.name, 'User name');
+    const id = randomUUID();
+    const now = new Date();
+
+    await this.executeStatement(
+      `INSERT INTO users (
+        id,
+        name,
+        role,
+        collection_access,
+        environment_access,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        trimmedName,
+        input.role,
+        serializeAccessList(input.collectionAccess),
+        serializeAccessList(input.environmentAccess),
+        now,
+        now
+      ]
+    );
+
+    const created = await this.findUserById(id);
+    if (!created) {
+      throw new Error('User not found after insert');
+    }
+
+    return created;
+  }
+
+  /**
+   * Finds a user by stable identifier.
+   *
+   * @param id - User identifier to look up.
+   */
+  async findUserById(id: string): Promise<UserRecord | null> {
+    const rows = await this.queryRows<UserSqlRow & RowDataPacket>(
+      `${USER_SELECT} WHERE id = ? LIMIT 1`,
+      [id]
+    );
+    const row = rows[0];
+    return row ? mapUserSqlRow(row) : null;
+  }
+
+  /**
+   * Finds a user by unique display name.
+   *
+   * @param name - User name to look up.
+   */
+  async findUserByName(name: string): Promise<UserRecord | null> {
+    const rows = await this.queryRows<UserSqlRow & RowDataPacket>(
+      `${USER_SELECT} WHERE name = ? LIMIT 1`,
+      [name]
+    );
+    const row = rows[0];
+    return row ? mapUserSqlRow(row) : null;
+  }
+
+  /**
+   * Lists all user accounts ordered by name.
+   */
+  async listUsers(): Promise<UserRecord[]> {
+    const rows = await this.queryRows<UserSqlRow & RowDataPacket>(
+      `${USER_SELECT} ORDER BY name ASC`
+    );
+    return rows.map(mapUserSqlRow);
+  }
+
+  /**
+   * Updates an existing user account.
+   *
+   * @param id - User identifier to update.
+   * @param input - Partial fields to apply.
+   */
+  async updateUser(id: string, input: UpdateUserInput): Promise<UserRecord> {
+    const existing = await this.findUserById(id);
+    if (!existing) {
+      throw new Error('User not found');
+    }
+
+    const name =
+      input.name !== undefined ? trimRequiredName(input.name, 'User name') : existing.name;
+    const role = input.role ?? existing.role;
+    const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
+    const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const updatedAt = new Date();
+
+    const result = await this.executeStatement(
+      `UPDATE users
+      SET name = ?,
+        role = ?,
+        collection_access = ?,
+        environment_access = ?,
+        updated_at = ?
+      WHERE id = ?`,
+      [
+        name,
+        role,
+        serializeAccessList(collectionAccess),
+        serializeAccessList(environmentAccess),
+        updatedAt,
+        id
+      ]
+    );
+
+    if ((result.affectedRows ?? 0) === 0) {
+      throw new Error('User not found');
+    }
+
+    const updated = await this.findUserById(id);
+    if (!updated) {
+      throw new Error('User not found');
+    }
+
+    return updated;
+  }
+
+  /**
+   * Deletes a user account and revokes all of their API tokens.
+   *
+   * @param id - User identifier to delete.
+   */
+  async deleteUser(id: string): Promise<void> {
+    const connection = await this.requirePool().getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.execute(
+        `UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
+        [new Date(), id]
+      );
+      await connection.execute('DELETE FROM users WHERE id = ?', [id]);
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  /**
+   * Assigns legacy API tokens without an owner to the bootstrap user.
+   */
+  async migrateOrphanTokensToBootstrapUser(): Promise<void> {
+    const rows = await this.queryRows<{ count: number } & RowDataPacket>(
+      'SELECT COUNT(*) AS count FROM api_tokens WHERE user_id IS NULL'
+    );
+    const orphanCount = rows[0]?.count ?? 0;
+    if (orphanCount === 0) {
+      return;
+    }
+
+    let bootstrapUser = await this.findUserByName(BOOTSTRAP_USER_NAME);
+    if (!bootstrapUser) {
+      bootstrapUser = await this.createUser({
+        name: BOOTSTRAP_USER_NAME,
+        role: 'user',
+        collectionAccess: ['*'],
+        environmentAccess: ['*']
+      });
+    }
+
+    await this.executeStatement('UPDATE api_tokens SET user_id = ? WHERE user_id IS NULL', [
+      bootstrapUser.id
+    ]);
   }
 
   /**
@@ -124,15 +319,17 @@ export class MysqlDatabase implements IDatabase {
     await this.executeStatement(
       `INSERT INTO api_tokens (
         id,
+        user_id,
         name,
         token_hash,
         token_prefix,
         created_at,
         last_used_at,
         revoked_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         record.id,
+        record.userId,
         record.name,
         record.tokenHash,
         record.tokenPrefix,
@@ -150,17 +347,10 @@ export class MysqlDatabase implements IDatabase {
    */
   async findActiveApiTokenByHash(tokenHash: string): Promise<ApiTokenRecord | null> {
     const rows = await this.queryRows<ApiTokenSqlRow & RowDataPacket>(
-      `SELECT
-        id,
-        name,
-        token_hash,
-        token_prefix,
-        created_at,
-        last_used_at,
-        revoked_at
-      FROM api_tokens
+      `${API_TOKEN_SELECT}
       WHERE token_hash = ?
         AND revoked_at IS NULL
+        AND user_id IS NOT NULL
       LIMIT 1`,
       [tokenHash]
     );
@@ -174,16 +364,25 @@ export class MysqlDatabase implements IDatabase {
    */
   async listApiTokens(): Promise<ApiTokenRecord[]> {
     const rows = await this.queryRows<ApiTokenSqlRow & RowDataPacket>(
-      `SELECT
-        id,
-        name,
-        token_hash,
-        token_prefix,
-        created_at,
-        last_used_at,
-        revoked_at
-      FROM api_tokens
+      `${API_TOKEN_SELECT}
+      WHERE user_id IS NOT NULL
       ORDER BY created_at DESC`
+    );
+
+    return rows.map(mapApiTokenSqlRow);
+  }
+
+  /**
+   * Returns API tokens owned by a specific user ordered newest-first.
+   *
+   * @param userId - Owning user identifier.
+   */
+  async listApiTokensByUserId(userId: string): Promise<ApiTokenRecord[]> {
+    const rows = await this.queryRows<ApiTokenSqlRow & RowDataPacket>(
+      `${API_TOKEN_SELECT}
+      WHERE user_id = ?
+      ORDER BY created_at DESC`,
+      [userId]
     );
 
     return rows.map(mapApiTokenSqlRow);
@@ -410,6 +609,20 @@ export class MysqlDatabase implements IDatabase {
   }
 
   /**
+   * Finds a saved request by id.
+   *
+   * @param id - Request identifier to look up.
+   */
+  async findRequestById(id: string): Promise<SavedRequestRecord | null> {
+    const rows = await this.queryRows<RequestSqlRow & RowDataPacket>(
+      'SELECT * FROM requests WHERE id = ? LIMIT 1',
+      [id]
+    );
+    const row = rows[0];
+    return row ? mapRequestSqlRow(row) : null;
+  }
+
+  /**
    * Inserts a new request or updates an existing one.
    *
    * @param input - Request fields to persist.
@@ -564,6 +777,20 @@ export class MysqlDatabase implements IDatabase {
       [collectionId]
     );
     return rows.map(mapFolderSqlRow);
+  }
+
+  /**
+   * Finds a folder by id.
+   *
+   * @param id - Folder identifier to look up.
+   */
+  async findFolderById(id: string): Promise<FolderRecord | null> {
+    const rows = await this.queryRows<FolderSqlRow & RowDataPacket>(
+      'SELECT * FROM folders WHERE id = ? LIMIT 1',
+      [id]
+    );
+    const row = rows[0];
+    return row ? mapFolderSqlRow(row) : null;
   }
 
   /**

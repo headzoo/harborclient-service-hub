@@ -23,7 +23,13 @@ vi.mock('#/db/index.js', async (importOriginal) => {
 
 import { createProgram } from '#/cli/program.js';
 import { migrateCommand } from '#/cli/migrateCommand.js';
-import { tokenCreateCommand, tokenListCommand, tokenRevokeCommand } from '#/cli/tokenCommand.js';
+import {
+  userCreateCommand,
+  userListCommand,
+  userTokenCreateCommand,
+  userTokenListCommand,
+  userTokenRevokeCommand
+} from '#/cli/userCommand.js';
 import { ConfigError, loadServerConfig } from '#/config/serverConfig.js';
 import type { IDatabase } from '#/db/index.js';
 import { createStubDatabase } from '#/db/stubDatabase.js';
@@ -39,8 +45,39 @@ function createMockDatabase(): IDatabase {
   db.connect.mockResolvedValue(undefined);
   db.disconnect.mockResolvedValue(undefined);
   db.migrate.mockResolvedValue(undefined);
+  db.createUser.mockResolvedValue({
+    id: 'user-1',
+    name: 'Alice',
+    role: 'user',
+    collectionAccess: ['*'],
+    environmentAccess: ['*'],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z')
+  });
+  db.findUserById.mockResolvedValue({
+    id: 'user-1',
+    name: 'Alice',
+    role: 'user',
+    collectionAccess: ['*'],
+    environmentAccess: ['*'],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z')
+  });
+  db.listUsers.mockResolvedValue([]);
+  db.updateUser.mockResolvedValue({
+    id: 'user-1',
+    name: 'Alice',
+    role: 'user',
+    collectionAccess: ['*'],
+    environmentAccess: ['*'],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z')
+  });
+  db.deleteUser.mockResolvedValue(undefined);
+  db.migrateOrphanTokensToBootstrapUser.mockResolvedValue(undefined);
   db.createApiToken.mockResolvedValue(undefined);
   db.findActiveApiTokenByHash.mockResolvedValue(null);
+  db.listApiTokensByUserId.mockResolvedValue([]);
   db.listApiTokens.mockResolvedValue([]);
   db.revokeApiToken.mockResolvedValue(false);
   db.touchApiTokenLastUsed.mockResolvedValue(undefined);
@@ -124,7 +161,7 @@ describe('createProgram', () => {
     expect(output).toContain('harborclient-server');
     expect(output).toContain('start');
     expect(output).toContain('migrate');
-    expect(output).toContain('token');
+    expect(output).toContain('user');
     expect(output).toContain('--verbose');
     expect(output).toContain('--config');
 
@@ -300,8 +337,8 @@ ${sampleDbSection}`);
   });
 });
 
-describe('token commands', () => {
-  it('creates a token and prints the one-time secret', async () => {
+describe('user commands', () => {
+  it('creates a user account', async () => {
     const configPath = writeConfig(`server:
   port: 8787
   host: 127.0.0.1
@@ -310,12 +347,66 @@ ${sampleDbSection}`);
     createDatabaseMock.mockReturnValue(db);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await tokenCreateCommand({ config: configPath, name: 'Alice laptop' });
+    await userCreateCommand({
+      config: configPath,
+      name: 'Alice',
+      role: 'user',
+      collectionAccess: ['*'],
+      environmentAccess: ['*']
+    });
 
     expect(db.connect).toHaveBeenCalledOnce();
+    expect(db.createUser).toHaveBeenCalledOnce();
+    expect(db.disconnect).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Created user "Alice"'));
+
+    log.mockRestore();
+  });
+
+  it('creates a token for a user and prints the one-time secret', async () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}`);
+    const db = createMockDatabase();
+    createDatabaseMock.mockReturnValue(db);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await userTokenCreateCommand({ config: configPath, user: 'user-1', name: 'Alice laptop' });
+
+    expect(db.connect).toHaveBeenCalledOnce();
+    expect(db.findUserById).toHaveBeenCalledWith('user-1');
     expect(db.createApiToken).toHaveBeenCalledOnce();
     expect(db.disconnect).toHaveBeenCalledOnce();
     expect(log.mock.calls.some((call) => String(call[0]).startsWith('hbk_'))).toBe(true);
+
+    log.mockRestore();
+  });
+
+  it('lists stored users', async () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}`);
+    const db = createMockDatabase();
+    db.listUsers = vi.fn().mockResolvedValue([
+      {
+        id: 'user-1',
+        name: 'Alice',
+        role: 'user',
+        collectionAccess: ['*'],
+        environmentAccess: ['*'],
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z')
+      }
+    ]);
+    createDatabaseMock.mockReturnValue(db);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await userListCommand({ config: configPath });
+
+    expect(db.listUsers).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith('- id: user-1');
 
     log.mockRestore();
   });
@@ -329,6 +420,7 @@ ${sampleDbSection}`);
     db.listApiTokens = vi.fn().mockResolvedValue([
       {
         id: 'token-1',
+        userId: 'user-1',
         name: 'Alice laptop',
         tokenHash: 'hash',
         tokenPrefix: 'hbk_AbCd1234',
@@ -340,7 +432,7 @@ ${sampleDbSection}`);
     createDatabaseMock.mockReturnValue(db);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await tokenListCommand({ config: configPath });
+    await userTokenListCommand({ config: configPath });
 
     expect(db.listApiTokens).toHaveBeenCalledOnce();
     expect(log).toHaveBeenCalledWith('- id: token-1');
@@ -358,7 +450,7 @@ ${sampleDbSection}`);
     createDatabaseMock.mockReturnValue(db);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await tokenRevokeCommand({ config: configPath, id: 'token-1' });
+    await userTokenRevokeCommand({ config: configPath, id: 'token-1' });
 
     expect(db.revokeApiToken).toHaveBeenCalledWith('token-1');
     expect(log).toHaveBeenCalledWith('Revoked API token token-1.');

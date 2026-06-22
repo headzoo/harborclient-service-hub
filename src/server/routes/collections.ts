@@ -1,7 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IDatabase } from '#/db/IDatabase.js';
+import {
+  canAccessCollection,
+  canCreateCollection,
+  canUseDataApi,
+  filterAccessibleCollections
+} from '#/server/auth/accessControl.js';
 import { handleDbError } from '#/server/routes/errors.js';
+import { denyUnlessAllowed, requireAuthenticatedUser } from '#/server/routes/authorize.js';
 import { errorResponseSchema, idParamSchema } from '#/server/routes/schemas/common.js';
 import {
   collectionRecordSchema,
@@ -32,11 +39,18 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: IDataba
     /**
      * Lists all collections ordered by name.
      */
-    handler: async (_request, reply) => {
+    handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseDataApi(user))) {
+          return;
+        }
+
         const collections = await db.listCollections();
         return reply.send({
-          collections: collections.map((collection) => serializeCollection(collection))
+          collections: filterAccessibleCollections(user, collections).map((collection) =>
+            serializeCollection(collection)
+          )
         });
       } catch (error) {
         if (handleDbError(reply, error)) {
@@ -63,6 +77,11 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: IDataba
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseDataApi(user) && canCreateCollection(user))) {
+          return;
+        }
+
         const collection = await db.createCollection(request.body.name);
         return reply.send(serializeCollection(collection));
       } catch (error) {
@@ -92,6 +111,16 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: IDataba
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.id)
+          )
+        ) {
+          return;
+        }
+
         const collection = await db.updateCollection(
           request.params.id,
           request.body.name,
@@ -127,6 +156,16 @@ export async function registerCollectionRoutes(app: FastifyInstance, db: IDataba
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.id)
+          )
+        ) {
+          return;
+        }
+
         await db.deleteCollection(request.params.id);
         return reply.code(204).send(null);
       } catch (error) {

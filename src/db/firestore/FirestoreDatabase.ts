@@ -6,8 +6,10 @@ import {
   ENVIRONMENTS_COLLECTION,
   FOLDERS_COLLECTION,
   REQUESTS_COLLECTION,
+  USERS_COLLECTION,
   WRITE_BATCH_LIMIT
 } from '#/db/firestore/const.js';
+import { BOOTSTRAP_USER_NAME } from '#/db/bootstrapUsers.js';
 import { firestoreConfigSchema } from '#/db/firestore/schemas.js';
 import type {
   FirestoreApiTokenDocument,
@@ -15,14 +17,16 @@ import type {
   FirestoreDatabaseConfig,
   FirestoreEnvironmentDocument,
   FirestoreFolderDocument,
-  FirestoreRequestDocument
+  FirestoreRequestDocument,
+  FirestoreUserDocument
 } from '#/db/firestore/types.js';
 import {
   mapFirestoreApiToken,
   mapFirestoreCollection,
   mapFirestoreEnvironment,
   mapFirestoreFolder,
-  mapFirestoreRequest
+  mapFirestoreRequest,
+  mapFirestoreUser
 } from '#/db/firestore/utils.js';
 import type { IDatabase } from '#/db/IDatabase.js';
 import { trimRequiredName } from '#/db/trimRequiredName.js';
@@ -30,11 +34,14 @@ import type {
   ApiTokenRecord,
   AuthConfig,
   CollectionRecord,
+  CreateUserInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   SaveRequestInput,
   SavedRequestRecord,
+  UpdateUserInput,
+  UserRecord,
   Variable
 } from '#/db/types.js';
 import { defaultAuth } from '#/db/types.js';
@@ -54,7 +61,7 @@ export class FirestoreDatabase implements IDatabase {
    *
    * @param config - Parsed Firestore connection settings.
    */
-  constructor(private readonly config: FirestoreDatabaseConfig) {}
+  constructor(private readonly config: FirestoreDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link FirestoreDatabase}.
@@ -106,10 +113,172 @@ export class FirestoreDatabase implements IDatabase {
   }
 
   /**
-   * Firestore uses schemaless documents; no migration work is required.
+   * Firestore uses schemaless documents; runs bootstrap migration for orphan tokens.
    */
   async migrate(): Promise<void> {
-    return;
+    await this.migrateOrphanTokensToBootstrapUser();
+  }
+
+  /**
+   * Creates a new user account with the given role and access lists.
+   *
+   * @param input - User fields to persist.
+   */
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const trimmedName = trimRequiredName(input.name, 'User name');
+    const id = randomUUID();
+    const now = new Date();
+    const data: FirestoreUserDocument = {
+      name: trimmedName,
+      role: input.role,
+      collectionAccess: input.collectionAccess,
+      environmentAccess: input.environmentAccess,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await this.requireClient().collection(USERS_COLLECTION).doc(id).set(data);
+    return mapFirestoreUser(id, data);
+  }
+
+  /**
+   * Finds a user by stable identifier.
+   *
+   * @param id - User identifier to look up.
+   */
+  async findUserById(id: string): Promise<UserRecord | null> {
+    const snapshot = await this.requireClient().collection(USERS_COLLECTION).doc(id).get();
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return mapFirestoreUser(id, snapshot.data() as FirestoreUserDocument);
+  }
+
+  /**
+   * Finds a user by unique display name.
+   *
+   * @param name - User name to look up.
+   */
+  async findUserByName(name: string): Promise<UserRecord | null> {
+    const snapshot = await this.requireClient()
+      .collection(USERS_COLLECTION)
+      .where('name', '==', name)
+      .limit(1)
+      .get();
+
+    const doc = snapshot.docs[0];
+    if (!doc) {
+      return null;
+    }
+
+    return mapFirestoreUser(doc.id, doc.data() as FirestoreUserDocument);
+  }
+
+  /**
+   * Lists all user accounts ordered by name.
+   */
+  async listUsers(): Promise<UserRecord[]> {
+    const snapshot = await this.requireClient().collection(USERS_COLLECTION).orderBy('name').get();
+    return snapshot.docs.map((doc) =>
+      mapFirestoreUser(doc.id, doc.data() as FirestoreUserDocument)
+    );
+  }
+
+  /**
+   * Updates an existing user account.
+   *
+   * @param id - User identifier to update.
+   * @param input - Partial fields to apply.
+   */
+  async updateUser(id: string, input: UpdateUserInput): Promise<UserRecord> {
+    const existing = await this.findUserById(id);
+    if (!existing) {
+      throw new Error('User not found');
+    }
+
+    const name =
+      input.name !== undefined ? trimRequiredName(input.name, 'User name') : existing.name;
+    const role = input.role ?? existing.role;
+    const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
+    const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const updatedAt = new Date();
+
+    await this.requireClient().collection(USERS_COLLECTION).doc(id).update({
+      name,
+      role,
+      collectionAccess,
+      environmentAccess,
+      updatedAt
+    });
+
+    const updated = await this.findUserById(id);
+    if (!updated) {
+      throw new Error('User not found');
+    }
+
+    return updated;
+  }
+
+  /**
+   * Deletes a user account and revokes all of their API tokens.
+   *
+   * @param id - User identifier to delete.
+   */
+  async deleteUser(id: string): Promise<void> {
+    const client = this.requireClient();
+    const tokenSnapshot = await client
+      .collection(API_TOKENS_COLLECTION)
+      .where('userId', '==', id)
+      .get();
+
+    const batch = client.batch();
+    const revokedAt = new Date();
+
+    for (const doc of tokenSnapshot.docs) {
+      const data = doc.data() as FirestoreApiTokenDocument;
+      if (data.revokedAt === null) {
+        batch.update(doc.ref, { revokedAt });
+      }
+    }
+
+    batch.delete(client.collection(USERS_COLLECTION).doc(id));
+    await batch.commit();
+  }
+
+  /**
+   * Assigns legacy API tokens without an owner to the bootstrap user.
+   */
+  async migrateOrphanTokensToBootstrapUser(): Promise<void> {
+    const client = this.requireClient();
+    const snapshot = await client.collection(API_TOKENS_COLLECTION).get();
+    const orphanDocs = snapshot.docs.filter((doc) => {
+      const data = doc.data() as Partial<FirestoreApiTokenDocument>;
+      return data.userId === undefined || data.userId === null || data.userId === '';
+    });
+
+    if (orphanDocs.length === 0) {
+      return;
+    }
+
+    let bootstrapUser = await this.findUserByName(BOOTSTRAP_USER_NAME);
+    if (!bootstrapUser) {
+      bootstrapUser = await this.createUser({
+        name: BOOTSTRAP_USER_NAME,
+        role: 'user',
+        collectionAccess: ['*'],
+        environmentAccess: ['*']
+      });
+    }
+
+    for (let index = 0; index < orphanDocs.length; index += WRITE_BATCH_LIMIT) {
+      const batch = client.batch();
+      const chunk = orphanDocs.slice(index, index + WRITE_BATCH_LIMIT);
+      for (const doc of chunk) {
+        batch.update(doc.ref, { userId: bootstrapUser.id });
+      }
+      await batch.commit();
+    }
   }
 
   /**
@@ -119,6 +288,7 @@ export class FirestoreDatabase implements IDatabase {
    */
   async createApiToken(record: ApiTokenRecord): Promise<void> {
     await this.requireClient().collection(API_TOKENS_COLLECTION).doc(record.id).set({
+      userId: record.userId,
       name: record.name,
       tokenHash: record.tokenHash,
       tokenPrefix: record.tokenPrefix,
@@ -146,7 +316,7 @@ export class FirestoreDatabase implements IDatabase {
     }
 
     const data = doc.data() as FirestoreApiTokenDocument;
-    if (data.revokedAt !== null) {
+    if (data.revokedAt !== null || !data.userId) {
       return null;
     }
 
@@ -159,6 +329,23 @@ export class FirestoreDatabase implements IDatabase {
   async listApiTokens(): Promise<ApiTokenRecord[]> {
     const snapshot = await this.requireClient()
       .collection(API_TOKENS_COLLECTION)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    return snapshot.docs
+      .map((doc) => mapFirestoreApiToken(doc.id, doc.data() as FirestoreApiTokenDocument))
+      .filter((token) => Boolean(token.userId));
+  }
+
+  /**
+   * Returns API tokens owned by a specific user ordered newest-first.
+   *
+   * @param userId - Owning user identifier.
+   */
+  async listApiTokensByUserId(userId: string): Promise<ApiTokenRecord[]> {
+    const snapshot = await this.requireClient()
+      .collection(API_TOKENS_COLLECTION)
+      .where('userId', '==', userId)
       .orderBy('createdAt', 'desc')
       .get();
 
@@ -396,6 +583,20 @@ export class FirestoreDatabase implements IDatabase {
   }
 
   /**
+   * Finds a saved request by id.
+   *
+   * @param id - Request identifier to look up.
+   */
+  async findRequestById(id: string): Promise<SavedRequestRecord | null> {
+    const snapshot = await this.requireClient().collection(REQUESTS_COLLECTION).doc(id).get();
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return mapFirestoreRequest(id, snapshot.data() as FirestoreRequestDocument);
+  }
+
+  /**
    * Inserts a new request or updates an existing one.
    *
    * @param input - Request fields to persist.
@@ -519,6 +720,20 @@ export class FirestoreDatabase implements IDatabase {
 
         return left.name.localeCompare(right.name);
       });
+  }
+
+  /**
+   * Finds a folder by id.
+   *
+   * @param id - Folder identifier to look up.
+   */
+  async findFolderById(id: string): Promise<FolderRecord | null> {
+    const snapshot = await this.requireClient().collection(FOLDERS_COLLECTION).doc(id).get();
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return mapFirestoreFolder(id, snapshot.data() as FirestoreFolderDocument);
   }
 
   /**

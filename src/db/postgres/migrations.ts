@@ -85,6 +85,29 @@ CREATE TABLE IF NOT EXISTS requests (
 `.trim();
 
 /**
+ * DDL for creating the users table when absent.
+ */
+export const USERS_MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  collection_access TEXT NOT NULL DEFAULT '[]',
+  environment_access TEXT NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+`.trim();
+
+/**
+ * Adds the owning user reference to api_tokens when upgrading existing databases.
+ */
+export const API_TOKENS_USER_ID_MIGRATION_SQL = `
+ALTER TABLE api_tokens
+  ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id);
+`.trim();
+
+/**
  * Ordered Postgres migrations applied by {@link PostgresDatabase.migrate}.
  */
 export const POSTGRES_MIGRATIONS = [
@@ -92,5 +115,7 @@ export const POSTGRES_MIGRATIONS = [
   COLLECTIONS_MIGRATION_SQL,
   ENVIRONMENTS_MIGRATION_SQL,
   FOLDERS_MIGRATION_SQL,
-  REQUESTS_MIGRATION_SQL
+  REQUESTS_MIGRATION_SQL,
+  USERS_MIGRATION_SQL,
+  API_TOKENS_USER_ID_MIGRATION_SQL
 ];

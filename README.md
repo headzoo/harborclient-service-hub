@@ -1,4 +1,4 @@
-# HarborClient Server
+![HarborClient Server](images/logo.png)
 
 **Full documentation:** [https://headzoo.github.io/harborclient-server/](https://headzoo.github.io/harborclient-server/)
 

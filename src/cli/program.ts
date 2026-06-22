@@ -2,11 +2,14 @@ import { Command } from 'commander';
 import { DEFAULT_CONFIG_PATH } from '#/config/serverConfig.js';
 import { registerMigrateCommand, type MigrateCommandOptions } from '#/cli/migrateCommand.js';
 import {
-  registerTokenCommand,
-  type TokenCommandOptions,
-  type TokenCreateCommandOptions,
-  type TokenRevokeCommandOptions
-} from '#/cli/tokenCommand.js';
+  registerUserCommand,
+  type UserCommandOptions,
+  type UserCreateCommandOptions,
+  type UserTokenCreateCommandOptions,
+  type UserTokenListCommandOptions,
+  type UserTokenRevokeCommandOptions,
+  type UserUpdateCommandOptions
+} from '#/cli/userCommand.js';
 import { registerStartCommand, type StartCommandOptions } from '#/server.js';
 
 export interface ProgramDependencies {
@@ -21,12 +24,17 @@ export interface ProgramDependencies {
   migrateCommand?: (options: MigrateCommandOptions) => Promise<void>;
 
   /**
-   * Optional overrides for token subcommand handlers (used in tests).
+   * Optional overrides for user subcommand handlers (used in tests).
    */
-  tokenCommand?: {
-    create?: (options: TokenCreateCommandOptions) => Promise<void>;
-    list?: (options: TokenCommandOptions) => Promise<void>;
-    revoke?: (options: TokenRevokeCommandOptions) => Promise<void>;
+  userCommand?: {
+    create?: (options: UserCreateCommandOptions) => Promise<void>;
+    list?: (options: UserCommandOptions) => Promise<void>;
+    show?: (options: UserUpdateCommandOptions) => Promise<void>;
+    update?: (options: UserUpdateCommandOptions) => Promise<void>;
+    delete?: (options: UserUpdateCommandOptions) => Promise<void>;
+    tokenCreate?: (options: UserTokenCreateCommandOptions) => Promise<void>;
+    tokenList?: (options: UserTokenListCommandOptions) => Promise<void>;
+    tokenRevoke?: (options: UserTokenRevokeCommandOptions) => Promise<void>;
   };
 }
 
@@ -55,7 +63,7 @@ export function createProgram(version: string, deps: ProgramDependencies = {}): 
 
   registerStartCommand(program, deps.startCommand);
   registerMigrateCommand(program, deps.migrateCommand);
-  registerTokenCommand(program, deps.tokenCommand);
+  registerUserCommand(program, deps.userCommand);
 
   return program;
 }

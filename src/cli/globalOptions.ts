@@ -15,10 +15,10 @@ export interface GlobalCommandOptions {
 /**
  * Merges root-level CLI options into a subcommand's parsed options.
  *
- * Commander stores global flags on the parent command; subcommands receive only
- * their own flags unless merged explicitly.
+ * Commander stores global flags on the root program. Nested subcommands such as
+ * `user create` must read them via {@link Command.optsWithGlobals}.
  *
- * @param command - The subcommand instance whose parent holds global opts.
+ * @param command - The subcommand instance handling the action.
  * @param options - Options parsed for the subcommand action.
  * @returns Options with global `verbose` and `config` values applied.
  */
@@ -26,11 +26,11 @@ export function mergeGlobalOptions<T extends GlobalCommandOptions>(
   command: Command,
   options: T
 ): T {
-  const globalOpts = command.parent?.opts() as GlobalCommandOptions | undefined;
+  const globalOpts = command.optsWithGlobals() as GlobalCommandOptions;
 
   return {
     ...options,
-    verbose: globalOpts?.verbose ?? options.verbose,
-    config: globalOpts?.config ?? options.config
+    verbose: globalOpts.verbose ?? options.verbose,
+    config: globalOpts.config ?? options.config
   };
 }

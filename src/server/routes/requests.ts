@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IDatabase } from '#/db/IDatabase.js';
+import { canAccessCollection, canUseDataApi } from '#/server/auth/accessControl.js';
 import { handleDbError } from '#/server/routes/errors.js';
+import { denyUnlessAllowed, requireAuthenticatedUser } from '#/server/routes/authorize.js';
 import {
   collectionIdParamSchema,
   errorResponseSchema,
@@ -41,6 +43,16 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const requests = await db.listRequests(request.params.collectionId);
         return reply.send({
           requests: requests.map((savedRequest) => serializeSavedRequest(savedRequest))
@@ -72,6 +84,16 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const savedRequest = await db.saveRequest({
           collectionId: request.params.collectionId,
           name: request.body.name,
@@ -115,6 +137,16 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.body.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const savedRequest = await db.saveRequest({
           id: request.params.id,
           collectionId: request.body.collectionId,
@@ -157,6 +189,21 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        const existingRequest = await db.findRequestById(request.params.id);
+        if (!existingRequest) {
+          return reply.code(404).send({ error: 'Request not found' });
+        }
+
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, existingRequest.collectionId)
+          )
+        ) {
+          return;
+        }
+
         await db.deleteRequest(request.params.id);
         return reply.code(204).send(null);
       } catch (error) {
@@ -185,6 +232,16 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         await db.reorderRequests(
           request.params.collectionId,
           request.body.folderId,
@@ -217,6 +274,21 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        const existingRequest = await db.findRequestById(request.params.id);
+        if (!existingRequest) {
+          return reply.code(404).send({ error: 'Request not found' });
+        }
+
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, existingRequest.collectionId)
+          )
+        ) {
+          return;
+        }
+
         await db.moveRequest(request.params.id, request.body.folderId, request.body.index);
         return reply.code(204).send(null);
       } catch (error) {

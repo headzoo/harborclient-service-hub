@@ -22,7 +22,7 @@ const { PoolMock } = vi.hoisted(() => {
      *
      * @param config - Connection settings passed to the pool constructor.
      */
-    constructor(public readonly config: unknown) {}
+    constructor(public readonly config: unknown) { }
   }
 
   return {
@@ -161,6 +161,14 @@ describe('PostgresDatabase api tokens', () => {
       expect.stringContaining('CREATE TABLE IF NOT EXISTS requests'),
       []
     );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS users'),
+      []
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('ADD COLUMN IF NOT EXISTS user_id'),
+      []
+    );
 
     await db.disconnect();
   });
@@ -170,6 +178,7 @@ describe('PostgresDatabase api tokens', () => {
 
     await expect(
       db.createApiToken({
+        userId: 'user-1',
         id: 'id',
         name: 'name',
         tokenHash: 'hash',

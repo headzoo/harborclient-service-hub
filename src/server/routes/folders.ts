@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IDatabase } from '#/db/IDatabase.js';
+import { canAccessCollection, canUseDataApi } from '#/server/auth/accessControl.js';
 import { handleDbError } from '#/server/routes/errors.js';
+import { denyUnlessAllowed, requireAuthenticatedUser } from '#/server/routes/authorize.js';
 import {
   collectionIdParamSchema,
   errorResponseSchema,
@@ -40,6 +42,16 @@ export async function registerFolderRoutes(app: FastifyInstance, db: IDatabase):
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const folders = await db.listFolders(request.params.collectionId);
         return reply.send({
           folders: folders.map((folder) => serializeFolder(folder))
@@ -70,6 +82,16 @@ export async function registerFolderRoutes(app: FastifyInstance, db: IDatabase):
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const folder = await db.createFolder(request.params.collectionId, request.body.name);
         return reply.send(serializeFolder(folder));
       } catch (error) {
@@ -99,6 +121,21 @@ export async function registerFolderRoutes(app: FastifyInstance, db: IDatabase):
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        const existingFolder = await db.findFolderById(request.params.id);
+        if (!existingFolder) {
+          return reply.code(404).send({ error: 'Folder not found' });
+        }
+
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, existingFolder.collectionId)
+          )
+        ) {
+          return;
+        }
+
         const folder = await db.renameFolder(request.params.id, request.body.name);
         return reply.send(serializeFolder(folder));
       } catch (error) {
@@ -126,6 +163,21 @@ export async function registerFolderRoutes(app: FastifyInstance, db: IDatabase):
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        const existingFolder = await db.findFolderById(request.params.id);
+        if (!existingFolder) {
+          return reply.code(404).send({ error: 'Folder not found' });
+        }
+
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, existingFolder.collectionId)
+          )
+        ) {
+          return;
+        }
+
         await db.deleteFolder(request.params.id);
         return reply.code(204).send(null);
       } catch (error) {
@@ -154,6 +206,16 @@ export async function registerFolderRoutes(app: FastifyInstance, db: IDatabase):
      */
     handler: async (request, reply) => {
       try {
+        const user = requireAuthenticatedUser(request);
+        if (
+          denyUnlessAllowed(
+            reply,
+            canUseDataApi(user) && canAccessCollection(user, request.params.collectionId)
+          )
+        ) {
+          return;
+        }
+
         await db.reorderFolders(request.params.collectionId, request.body.orderedFolderIds);
         return reply.code(204).send(null);
       } catch (error) {

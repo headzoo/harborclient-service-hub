@@ -24,7 +24,7 @@ const { FirestoreMock } = vi.hoisted(() => {
      *
      * @param config - Client settings passed to the Firestore constructor.
      */
-    constructor(public readonly config: unknown) {}
+    constructor(public readonly config: unknown) { }
   }
 
   return {
@@ -130,7 +130,7 @@ describe('FirestoreDatabase lifecycle', () => {
 });
 
 describe('FirestoreDatabase api tokens', () => {
-  it('does not require migrate work', async () => {
+  it('runs bootstrap migration for orphan tokens', async () => {
     const db = FirestoreDatabase.fromConfig({
       driver: 'firestore',
       projectId: 'my-project'
@@ -149,6 +149,7 @@ describe('FirestoreDatabase api tokens', () => {
 
     await expect(
       db.createApiToken({
+        userId: 'user-1',
         id: 'id',
         name: 'name',
         tokenHash: 'hash',
@@ -203,7 +204,7 @@ describe('FirestoreDatabase collections', () => {
          *
          * @param config - Client settings passed to the Firestore constructor.
          */
-        constructor(public readonly config: unknown) {}
+        constructor(public readonly config: unknown) { }
       }
     );
 

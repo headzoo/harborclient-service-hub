@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { mapApiTokenSqlRow, type ApiTokenSqlRow } from '#/db/apiTokenRows.js';
+import { BOOTSTRAP_USER_NAME } from '#/db/bootstrapUsers.js';
 import {
   mapCollectionSqlRow,
   mapEnvironmentSqlRow,
@@ -16,15 +17,19 @@ import { POSTGRES_MIGRATIONS } from '#/db/postgres/migrations.js';
 import { postgresConfigSchema } from '#/db/postgres/schemas.js';
 import type { PostgresDatabaseConfig } from '#/db/postgres/types.js';
 import { trimRequiredName } from '#/db/trimRequiredName.js';
+import { mapUserSqlRow, serializeAccessList, type UserSqlRow } from '#/db/userRows.js';
 import type {
   ApiTokenRecord,
   AuthConfig,
   CollectionRecord,
+  CreateUserInput,
   EnvironmentRecord,
   FolderRecord,
   KeyValue,
   SaveRequestInput,
   SavedRequestRecord,
+  UpdateUserInput,
+  UserRecord,
   Variable
 } from '#/db/types.js';
 import { DEFAULT_AUTH_JSON } from '#/db/types.js';
@@ -35,6 +40,18 @@ const { Pool } = pg;
 const COLLECTION_SELECT =
   'SELECT id, name, variables, headers, auth, pre_request_script, post_request_script, created_at FROM collections';
 const ENVIRONMENT_SELECT = 'SELECT id, name, variables, created_at FROM environments';
+const USER_SELECT =
+  'SELECT id, name, role, collection_access, environment_access, created_at, updated_at FROM users';
+const API_TOKEN_SELECT = `SELECT
+  id,
+  user_id,
+  name,
+  token_hash,
+  token_prefix,
+  created_at,
+  last_used_at,
+  revoked_at
+FROM api_tokens`;
 
 /**
  * Postgres-backed database implementation.
@@ -50,7 +67,7 @@ export class PostgresDatabase implements IDatabase {
    *
    * @param config - Parsed Postgres connection settings.
    */
-  constructor(private readonly config: PostgresDatabaseConfig) {}
+  constructor(private readonly config: PostgresDatabaseConfig) { }
 
   /**
    * Validates raw config and constructs a {@link PostgresDatabase}.
@@ -116,6 +133,177 @@ export class PostgresDatabase implements IDatabase {
     for (const sql of POSTGRES_MIGRATIONS) {
       await this.query(sql);
     }
+
+    await this.migrateOrphanTokensToBootstrapUser();
+  }
+
+  /**
+   * Creates a new user account with the given role and access lists.
+   *
+   * @param input - User fields to persist.
+   */
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const trimmedName = trimRequiredName(input.name, 'User name');
+    const id = randomUUID();
+    const now = new Date();
+
+    const result = await this.query<UserSqlRow>(
+      `INSERT INTO users (
+        id,
+        name,
+        role,
+        collection_access,
+        environment_access,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, name, role, collection_access, environment_access, created_at, updated_at`,
+      [
+        id,
+        trimmedName,
+        input.role,
+        serializeAccessList(input.collectionAccess),
+        serializeAccessList(input.environmentAccess),
+        now,
+        now
+      ]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error('User not found after insert');
+    }
+
+    return mapUserSqlRow(row);
+  }
+
+  /**
+   * Finds a user by stable identifier.
+   *
+   * @param id - User identifier to look up.
+   */
+  async findUserById(id: string): Promise<UserRecord | null> {
+    const result = await this.query<UserSqlRow>(`${USER_SELECT} WHERE id = $1 LIMIT 1`, [id]);
+    const row = result.rows[0];
+    return row ? mapUserSqlRow(row) : null;
+  }
+
+  /**
+   * Finds a user by unique display name.
+   *
+   * @param name - User name to look up.
+   */
+  async findUserByName(name: string): Promise<UserRecord | null> {
+    const result = await this.query<UserSqlRow>(`${USER_SELECT} WHERE name = $1 LIMIT 1`, [name]);
+    const row = result.rows[0];
+    return row ? mapUserSqlRow(row) : null;
+  }
+
+  /**
+   * Lists all user accounts ordered by name.
+   */
+  async listUsers(): Promise<UserRecord[]> {
+    const result = await this.query<UserSqlRow>(`${USER_SELECT} ORDER BY name ASC`);
+    return result.rows.map(mapUserSqlRow);
+  }
+
+  /**
+   * Updates an existing user account.
+   *
+   * @param id - User identifier to update.
+   * @param input - Partial fields to apply.
+   */
+  async updateUser(id: string, input: UpdateUserInput): Promise<UserRecord> {
+    const existing = await this.findUserById(id);
+    if (!existing) {
+      throw new Error('User not found');
+    }
+
+    const name =
+      input.name !== undefined ? trimRequiredName(input.name, 'User name') : existing.name;
+    const role = input.role ?? existing.role;
+    const collectionAccess = input.collectionAccess ?? existing.collectionAccess;
+    const environmentAccess = input.environmentAccess ?? existing.environmentAccess;
+    const updatedAt = new Date();
+
+    const result = await this.query(
+      `UPDATE users
+      SET name = $1,
+        role = $2,
+        collection_access = $3,
+        environment_access = $4,
+        updated_at = $5
+      WHERE id = $6`,
+      [
+        name,
+        role,
+        serializeAccessList(collectionAccess),
+        serializeAccessList(environmentAccess),
+        updatedAt,
+        id
+      ]
+    );
+
+    if ((result.rowCount ?? 0) === 0) {
+      throw new Error('User not found');
+    }
+
+    const updated = await this.findUserById(id);
+    if (!updated) {
+      throw new Error('User not found');
+    }
+
+    return updated;
+  }
+
+  /**
+   * Deletes a user account and revokes all of their API tokens.
+   *
+   * @param id - User identifier to delete.
+   */
+  async deleteUser(id: string): Promise<void> {
+    const client = await this.requirePool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE api_tokens SET revoked_at = $2 WHERE user_id = $1 AND revoked_at IS NULL`,
+        [id, new Date()]
+      );
+      await client.query('DELETE FROM users WHERE id = $1', [id]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Assigns legacy API tokens without an owner to the bootstrap user.
+   */
+  async migrateOrphanTokensToBootstrapUser(): Promise<void> {
+    const orphanResult = await this.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM api_tokens WHERE user_id IS NULL'
+    );
+    const orphanCount = Number(orphanResult.rows[0]?.count ?? 0);
+    if (orphanCount === 0) {
+      return;
+    }
+
+    let bootstrapUser = await this.findUserByName(BOOTSTRAP_USER_NAME);
+    if (!bootstrapUser) {
+      bootstrapUser = await this.createUser({
+        name: BOOTSTRAP_USER_NAME,
+        role: 'user',
+        collectionAccess: ['*'],
+        environmentAccess: ['*']
+      });
+    }
+
+    await this.query('UPDATE api_tokens SET user_id = $1 WHERE user_id IS NULL', [
+      bootstrapUser.id
+    ]);
   }
 
   /**
@@ -127,15 +315,17 @@ export class PostgresDatabase implements IDatabase {
     await this.query(
       `INSERT INTO api_tokens (
         id,
+        user_id,
         name,
         token_hash,
         token_prefix,
         created_at,
         last_used_at,
         revoked_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         record.id,
+        record.userId,
         record.name,
         record.tokenHash,
         record.tokenPrefix,
@@ -153,17 +343,10 @@ export class PostgresDatabase implements IDatabase {
    */
   async findActiveApiTokenByHash(tokenHash: string): Promise<ApiTokenRecord | null> {
     const result = await this.query<ApiTokenSqlRow>(
-      `SELECT
-        id,
-        name,
-        token_hash,
-        token_prefix,
-        created_at,
-        last_used_at,
-        revoked_at
-      FROM api_tokens
+      `${API_TOKEN_SELECT}
       WHERE token_hash = $1
         AND revoked_at IS NULL
+        AND user_id IS NOT NULL
       LIMIT 1`,
       [tokenHash]
     );
@@ -177,16 +360,25 @@ export class PostgresDatabase implements IDatabase {
    */
   async listApiTokens(): Promise<ApiTokenRecord[]> {
     const result = await this.query<ApiTokenSqlRow>(
-      `SELECT
-        id,
-        name,
-        token_hash,
-        token_prefix,
-        created_at,
-        last_used_at,
-        revoked_at
-      FROM api_tokens
+      `${API_TOKEN_SELECT}
+      WHERE user_id IS NOT NULL
       ORDER BY created_at DESC`
+    );
+
+    return result.rows.map(mapApiTokenSqlRow);
+  }
+
+  /**
+   * Returns API tokens owned by a specific user ordered newest-first.
+   *
+   * @param userId - Owning user identifier.
+   */
+  async listApiTokensByUserId(userId: string): Promise<ApiTokenRecord[]> {
+    const result = await this.query<ApiTokenSqlRow>(
+      `${API_TOKEN_SELECT}
+      WHERE user_id = $1
+      ORDER BY created_at DESC`,
+      [userId]
     );
 
     return result.rows.map(mapApiTokenSqlRow);
@@ -403,6 +595,19 @@ export class PostgresDatabase implements IDatabase {
   }
 
   /**
+   * Finds a saved request by id.
+   *
+   * @param id - Request identifier to look up.
+   */
+  async findRequestById(id: string): Promise<SavedRequestRecord | null> {
+    const result = await this.query<RequestSqlRow>('SELECT * FROM requests WHERE id = $1 LIMIT 1', [
+      id
+    ]);
+    const row = result.rows[0];
+    return row ? mapRequestSqlRow(row) : null;
+  }
+
+  /**
    * Inserts a new request or updates an existing one.
    *
    * @param input - Request fields to persist.
@@ -554,6 +759,19 @@ export class PostgresDatabase implements IDatabase {
       [collectionId]
     );
     return result.rows.map(mapFolderSqlRow);
+  }
+
+  /**
+   * Finds a folder by id.
+   *
+   * @param id - Folder identifier to look up.
+   */
+  async findFolderById(id: string): Promise<FolderRecord | null> {
+    const result = await this.query<FolderSqlRow>('SELECT * FROM folders WHERE id = $1 LIMIT 1', [
+      id
+    ]);
+    const row = result.rows[0];
+    return row ? mapFolderSqlRow(row) : null;
   }
 
   /**

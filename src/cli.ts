@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { CommanderError } from 'commander';
+import { normalizeCliArgv } from '#/cli/argv.js';
 import { createProgram } from '#/cli/program.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -14,7 +15,7 @@ async function main(): Promise<void> {
   program.exitOverride();
 
   try {
-    await program.parseAsync(process.argv);
+    await program.parseAsync(normalizeCliArgv(process.argv));
   } catch (error) {
     if (error instanceof CommanderError) {
       process.exitCode = error.exitCode;
