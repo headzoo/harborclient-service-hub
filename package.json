@@ -1,6 +1,6 @@
 {
   "name": "team-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Team Hub — central server for HarborClient",
   "type": "module",
   "bin": {
