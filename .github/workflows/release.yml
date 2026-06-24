@@ -1,8 +1,8 @@
 name: Release
 
 # Bumps `package.json`, renames `## Unreleased` in CHANGELOG.md, commits + tags +
-# pushes back to main, then creates a GitHub release. Trigger manually with a
-# semver bump input.
+# pushes back to main, creates a GitHub release, and publishes to npm. Trigger
+# manually with a semver bump input.
 
 on:
   workflow_dispatch:
@@ -21,10 +21,18 @@ permissions:
   contents: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   release:
+    needs: ci
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+
     steps:
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -42,14 +50,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm test
-
       - name: Bump version
+        id: bump
         run: |
           set -euo pipefail
           VERSION=$(pnpm version "${{ inputs.release_type }}" --no-git-tag-version | tail -n1 | sed 's/^v//')
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Bumped to $VERSION"
 
       - name: Update CHANGELOG.md for release
@@ -86,6 +93,7 @@ jobs:
           PY
 
       - name: Commit, tag, and push
+        if: env.VERSION != ''
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -99,3 +107,37 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "v${VERSION}" --generate-notes --title "v${VERSION}"
+
+  publish-npm:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npm
+        run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

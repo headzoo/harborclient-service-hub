@@ -1,7 +1,7 @@
 {
-  "name": "team-hub",
+  "name": "@harborclient/team-hub",
   "version": "0.2.0",
-  "description": "Team Hub — central server for HarborClient",
+  "description": "Team Hub - central server for HarborClient",
   "type": "module",
   "bin": {
     "team-hub": "./dist/cli.js"
@@ -13,6 +13,7 @@
     "prepare": "git config --local core.hooksPath .githooks 2>/dev/null || true",
     "dev": "tsx src/cli.ts",
     "build": "tsup",
+    "prepublishOnly": "pnpm build",
     "start": "node dist/cli.js start",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -34,6 +35,20 @@
     "email": "harbor@example.com"
   },
   "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harborclient/team-hub.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "packageManager": "pnpm@10.17.1",
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",
