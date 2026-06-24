@@ -85,7 +85,7 @@ export class FirestoreDatabase implements IDatabase {
    *
    * @param config - Parsed Firestore connection settings.
    */
-  constructor(private readonly config: FirestoreDatabaseConfig) { }
+  constructor(private readonly config: FirestoreDatabaseConfig) {}
 
   /**
    * Validates raw config and constructs a {@link FirestoreDatabase}.

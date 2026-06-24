@@ -101,7 +101,7 @@ export class PostgresDatabase implements IDatabase {
    *
    * @param config - Parsed Postgres connection settings.
    */
-  constructor(private readonly config: PostgresDatabaseConfig) { }
+  constructor(private readonly config: PostgresDatabaseConfig) {}
 
   /**
    * Validates raw config and constructs a {@link PostgresDatabase}.

@@ -99,7 +99,7 @@ export class MysqlDatabase implements IDatabase {
    *
    * @param config - Parsed MySQL connection settings.
    */
-  constructor(private readonly config: MysqlDatabaseConfig) { }
+  constructor(private readonly config: MysqlDatabaseConfig) {}
 
   /**
    * Validates raw config and constructs a {@link MysqlDatabase}.
