@@ -32,6 +32,7 @@ RUN apt-get update \
   && rm -f /etc/nginx/sites-enabled/default
 
 ENV PORT=8080 \
+  NGINX_SERVER_NAME=_ \
   TEAM_HUB_PORT=8787 \
   TEAM_HUB_HOST=127.0.0.1 \
   TEAM_HUB_CONFIG=/etc/team-hub/server.yaml \

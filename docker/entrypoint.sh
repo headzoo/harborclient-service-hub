@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export PORT="${PORT:-8080}"
+export NGINX_SERVER_NAME="${NGINX_SERVER_NAME:-_}"
 export TEAM_HUB_PORT="${TEAM_HUB_PORT:-8787}"
 export TEAM_HUB_HOST="${TEAM_HUB_HOST:-127.0.0.1}"
 export TEAM_HUB_CONFIG="${TEAM_HUB_CONFIG:-/etc/team-hub/server.yaml}"
@@ -79,7 +80,7 @@ else
   echo "entrypoint: keeping existing config at ${TEAM_HUB_CONFIG}"
 fi
 
-envsubst '${PORT} ${TEAM_HUB_PORT}' \
+envsubst '${PORT} ${TEAM_HUB_PORT} ${NGINX_SERVER_NAME}' \
   < /docker/nginx.conf.template > /etc/nginx/conf.d/team-hub.conf
 
 cat > "${SUPERVISOR_CONF}" <<EOF

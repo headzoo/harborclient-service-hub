@@ -681,6 +681,7 @@ Use `/health` for manual checks and uptime monitoring. The response includes `st
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `PORT` | `8080` | Nginx listen port (some platforms inject this at runtime) |
+| `NGINX_SERVER_NAME` | `_` | Nginx `server_name` (catch-all `_`; set to your hostname for named vhosts) |
 | `TEAM_HUB_PORT` | `8787` | Internal Team Hub port |
 | `TEAM_HUB_HOST` | `127.0.0.1` | Team Hub bind address |
 | `TEAM_HUB_CONFIG` | `/etc/team-hub/server.yaml` | Config file path (generated on first boot if missing) |
