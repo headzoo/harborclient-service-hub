@@ -952,11 +952,13 @@ Updates an existing saved request by id.
 
 ### DELETE /requests/:id
 
-Deletes a saved request by id.
+Deletes a saved request by id. Only the user who created the request may delete it via this route.
 
 **Auth:** Bearer token required.
 
 **Response `204`:** No content.
+
+**Response `403`:** The authenticated user did not create the request (`{ "error": "Forbidden" }`).
 
 **Response `404`:** Request not found.
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CollectionRecord, EnvironmentRecord, UserRecord } from '#/db/types.js';
+import type {
+  CollectionRecord,
+  EnvironmentRecord,
+  SavedRequestRecord,
+  UserRecord
+} from '#/db/types.js';
 import {
   canAccessCollection,
   canAccessEnvironment,
@@ -7,6 +12,7 @@ import {
   canCreateEnvironment,
   canDeleteCollection,
   canDeleteEnvironment,
+  canDeleteRequest,
   canListCollections,
   canListEnvironments,
   canUseDataApi,
@@ -104,6 +110,28 @@ const sampleEnvironments: EnvironmentRecord[] = [
   }
 ];
 
+const sampleRequest: SavedRequestRecord = {
+  id: 'request-a',
+  collectionId: 'collection-a',
+  name: 'Get health',
+  method: 'GET',
+  url: '/health',
+  headers: [],
+  params: [],
+  auth: { type: 'none', basic: { username: '', password: '' }, bearer: { token: '' } },
+  body: '',
+  bodyType: 'none',
+  preRequestScript: '',
+  postRequestScript: '',
+  comment: '',
+  folderId: null,
+  sortOrder: 0,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  createdByUserId: 'user-1',
+  updatedByUserId: null
+};
+
 describe('accessControl', () => {
   it('detects wildcard access lists', () => {
     expect(hasWildcardAccess(['*'])).toBe(true);
@@ -156,6 +184,15 @@ describe('accessControl', () => {
     expect(canDeleteEnvironment(baseUser, { ...sampleEnvironments[0], deletionLocked: true })).toBe(
       false
     );
+  });
+
+  it('allows request delete only for the creating user with collection access', () => {
+    expect(canDeleteRequest(baseUser, sampleRequest)).toBe(true);
+    expect(canDeleteRequest(baseUser, { ...sampleRequest, createdByUserId: 'other-user' })).toBe(
+      false
+    );
+    expect(canDeleteRequest(baseUser, { ...sampleRequest, createdByUserId: null })).toBe(false);
+    expect(canDeleteRequest(adminUser, sampleRequest)).toBe(false);
   });
 
   it('allows create only for wildcard users', () => {

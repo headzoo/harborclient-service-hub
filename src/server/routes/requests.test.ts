@@ -62,6 +62,42 @@ describe('request routes', () => {
     await app.close();
   });
 
+  it('returns 403 when deleting a request created by another user', async () => {
+    const db = createStubDatabase();
+    db.findRequestById.mockResolvedValue({ ...sampleRequest, createdByUserId: 'other-user' });
+    const app = await createProtectedTestApp({ db, withValidAuth: true });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/requests/request-1',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(db.deleteRequest).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns 403 when deleting a request with no creator attribution', async () => {
+    const db = createStubDatabase();
+    db.findRequestById.mockResolvedValue({ ...sampleRequest, createdByUserId: null });
+    const app = await createProtectedTestApp({ db, withValidAuth: true });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/requests/request-1',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(db.deleteRequest).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('deletes a saved request by id', async () => {
     const db = createStubDatabase();
     db.findRequestById.mockResolvedValue(sampleRequest);

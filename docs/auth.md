@@ -41,6 +41,7 @@ Every account has a role of either `user` or `admin`. Set the role when creating
 - Permissions come from access lists described in [Access](#access) below.
 - Cannot call management endpoints (403 when those routes exist).
 - May delete a collection via `DELETE /collections/:id` only when they created it and `deletionLocked` is false; admins may remove any collection via `DELETE /admin/collections/:id`.
+- May delete a saved request via `DELETE /requests/:id` only when they created it.
 
 ### Access
 

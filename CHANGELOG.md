@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Enhance request deletion logic and access control. (`d6230dc`)
 - Update NGINX configuration to use dynamic server name. (`b49c61d`)
 - Enhance collection deletion logic and access control. (`15a4c54`)
 - Include deletion_locked in PostgresDatabase collection test mock row.. (`96c4641`)

@@ -1,4 +1,9 @@
-import type { CollectionRecord, EnvironmentRecord, UserRecord } from '#/db/types.js';
+import type {
+  CollectionRecord,
+  EnvironmentRecord,
+  SavedRequestRecord,
+  UserRecord
+} from '#/db/types.js';
 
 /**
  * Returns true when the authenticated user has an admin role.
@@ -129,6 +134,21 @@ export function canDeleteCollection(user: UserRecord, collection: CollectionReco
 export function canDeleteEnvironment(user: UserRecord, environment: EnvironmentRecord): boolean {
   return (
     canUseDataApi(user) && canAccessEnvironment(user, environment.id) && !environment.deletionLocked
+  );
+}
+
+/**
+ * Returns true when the user may delete a specific saved request via the data API.
+ *
+ * @param user - Authenticated user attached to the request.
+ * @param request - Saved request record being deleted.
+ * @returns True when the user created the request and has access to its collection.
+ */
+export function canDeleteRequest(user: UserRecord, request: SavedRequestRecord): boolean {
+  return (
+    canUseDataApi(user) &&
+    canAccessCollection(user, request.collectionId) &&
+    request.createdByUserId === user.id
   );
 }
 

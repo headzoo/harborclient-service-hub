@@ -1,7 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { IDatabase } from '#/db/IDatabase.js';
-import { canAccessCollection, canUseDataApi } from '#/server/auth/accessControl.js';
+import {
+  canAccessCollection,
+  canDeleteRequest,
+  canUseDataApi
+} from '#/server/auth/accessControl.js';
 import { handleDbError } from '#/server/routes/errors.js';
 import { denyUnlessAllowed, requireAuthenticatedUser } from '#/server/routes/authorize.js';
 import {
@@ -201,12 +205,7 @@ export async function registerRequestRoutes(app: FastifyInstance, db: IDatabase)
           return reply.code(404).send({ error: 'Request not found' });
         }
 
-        if (
-          denyUnlessAllowed(
-            reply,
-            canUseDataApi(user) && canAccessCollection(user, existingRequest.collectionId)
-          )
-        ) {
+        if (denyUnlessAllowed(reply, canDeleteRequest(user, existingRequest))) {
           return;
         }
 
