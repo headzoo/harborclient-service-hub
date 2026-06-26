@@ -110,6 +110,20 @@ export const pluginsSectionSchema = z.object({
 });
 
 /**
+ * Zod schema for supported log levels in the optional `logging` section.
+ */
+export const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
+
+/**
+ * Zod schema for the optional `logging` section of the config file.
+ */
+export const loggingSectionSchema = z.object({
+  level: logLevelSchema.optional(),
+  file: z.string().trim().min(1).optional(),
+  console: z.boolean().optional()
+});
+
+/**
  * Zod schema for the full server config document (`server.yaml` root mapping).
  */
 export const serverConfigDocumentSchema = z.object({
@@ -117,7 +131,8 @@ export const serverConfigDocumentSchema = z.object({
   db: dbSectionSchema,
   redis: redisSectionSchema,
   llm: llmSectionSchema.optional(),
-  plugins: pluginsSectionSchema.optional()
+  plugins: pluginsSectionSchema.optional(),
+  logging: loggingSectionSchema.optional()
 });
 
 /**
@@ -134,3 +149,8 @@ export type LlmSection = z.infer<typeof llmSectionSchema>;
  * Validated shape of the optional plugins section.
  */
 export type PluginsSection = z.infer<typeof pluginsSectionSchema>;
+
+/**
+ * Validated shape of the optional logging section.
+ */
+export type LoggingSection = z.infer<typeof loggingSectionSchema>;

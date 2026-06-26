@@ -4,8 +4,11 @@ import {
   validatorCompiler,
   type ZodTypeProvider
 } from 'fastify-type-provider-zod';
+import { DEFAULT_LOGGING_CONFIG } from '#/config/loggingConfig.js';
 import type { IDatabase } from '#/db/IDatabase.js';
 import type { IThrottleStore } from '#/server/auth/throttle/IThrottleStore.js';
+import { registerHttpLogging } from '#/server/logging/httpLogging.js';
+import { createLogger, type Logger } from '#/server/logging/logger.js';
 import { readPackageVersion } from '#/packageVersion.js';
 import { registerRoutes } from '#/server/routes/index.js';
 import type { ReloadResult, RuntimeContext } from '#/server/runtimeContext.js';
@@ -35,6 +38,11 @@ export interface CreateServerOptions {
    * Reloads server.yaml and returns a per-section report.
    */
   reloadConfig?: () => Promise<ReloadResult>;
+
+  /**
+   * Winston logger for HTTP request and error logging; defaults from config.
+   */
+  logger?: Logger;
 }
 
 /**
@@ -67,12 +75,17 @@ export async function createServer(
     throw new Error('createServer requires db and throttleStore.');
   }
 
+  const logger =
+    options.logger ?? ctx?.logger ?? createLogger(legacyConfig?.logging ?? DEFAULT_LOGGING_CONFIG);
+
   const app = Fastify({
     logger: options.verbose ?? false
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  registerHttpLogging(app, logger);
 
   await registerRoutes(app, {
     version: options.version ?? readPackageVersion(),

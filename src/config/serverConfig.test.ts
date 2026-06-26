@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_LOGGING_CONFIG } from '#/config/loggingConfig.js';
 import { ConfigError, loadServerConfig } from '#/config/serverConfig.js';
 
 /**
@@ -54,7 +55,8 @@ ${sampleDbSection}${sampleRedisSection}`);
         port: 6380
       },
       llm: null,
-      plugins: null
+      plugins: null,
+      logging: DEFAULT_LOGGING_CONFIG
     });
   });
 
@@ -80,7 +82,8 @@ ${sampleDbSection}${sampleRedisSection}`);
         port: 6380
       },
       llm: null,
-      plugins: null
+      plugins: null,
+      logging: DEFAULT_LOGGING_CONFIG
     });
   });
 
@@ -117,7 +120,8 @@ ${sampleDbSection}${sampleRedisSection}llm:
         },
         models: ['gpt-4o']
       },
-      plugins: null
+      plugins: null,
+      logging: DEFAULT_LOGGING_CONFIG
     });
   });
 
@@ -155,7 +159,8 @@ ${sampleDbSection}${sampleRedisSection}plugins:
           'https://example.com/catalog.json'
         ],
         trusted: ['https://harborclient.com/plugins/trusted.json']
-      }
+      },
+      logging: DEFAULT_LOGGING_CONFIG
     });
   });
 
@@ -271,6 +276,34 @@ ${sampleDbSection}${sampleRedisSection}`);
     expect(() => loadServerConfig(configPath)).toThrow(
       'Port must be an integer between 1 and 65535.'
     );
+  });
+
+  it('loads an optional logging section', () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}${sampleRedisSection}logging:
+  level: debug
+  file: /var/log/team-hub.log
+  console: false
+`);
+
+    expect(loadServerConfig(configPath).logging).toEqual({
+      level: 'debug',
+      file: '/var/log/team-hub.log',
+      console: false
+    });
+  });
+
+  it('throws on invalid logging level', () => {
+    const configPath = writeConfig(`server:
+  port: 8787
+  host: 127.0.0.1
+${sampleDbSection}${sampleRedisSection}logging:
+  level: trace
+`);
+
+    expect(() => loadServerConfig(configPath)).toThrow(ConfigError);
   });
 
   it('throws on invalid host values', () => {

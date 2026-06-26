@@ -3,10 +3,16 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { ZodError } from 'zod/v4';
 import { normalizeLlmConfig, type LlmConfig } from '#/config/llmConfig.js';
+import {
+  DEFAULT_LOGGING_CONFIG,
+  normalizeLoggingConfig,
+  type LoggingConfig
+} from '#/config/loggingConfig.js';
 import { normalizePluginsConfig, type PluginsConfig } from '#/config/pluginsConfig.js';
 import {
   dbSectionSchema,
   llmSectionSchema,
+  loggingSectionSchema,
   pluginsSectionSchema,
   redisSectionSchema,
   serverConfigDocumentSchema,
@@ -48,6 +54,11 @@ export interface ServerConfig {
    * Normalized plugin source URLs when the optional `plugins` section is present.
    */
   plugins: PluginsConfig | null;
+
+  /**
+   * Normalized logging settings (defaults apply when the section is omitted).
+   */
+  logging: LoggingConfig;
 }
 
 /**
@@ -211,13 +222,23 @@ function parseServerConfig(document: unknown): ServerConfig {
     plugins = normalizePluginsConfig(parsedPluginsSection.data);
   }
 
+  let logging = DEFAULT_LOGGING_CONFIG;
+  if (root.logging !== undefined) {
+    const parsedLoggingSection = loggingSectionSchema.safeParse(root.logging);
+    if (!parsedLoggingSection.success) {
+      throw new ConfigError(formatZodError(parsedLoggingSection.error));
+    }
+    logging = normalizeLoggingConfig(parsedLoggingSection.data);
+  }
+
   return {
     port: parsedDocument.data.server.port,
     host: parsedDocument.data.server.host,
     db: parsedDbSection.data as Record<string, unknown>,
     redis: parsedRedisSection.data as Record<string, unknown>,
     llm,
-    plugins
+    plugins,
+    logging
   };
 }
 

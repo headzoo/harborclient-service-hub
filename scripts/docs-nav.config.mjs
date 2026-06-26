@@ -23,6 +23,7 @@ export const docsNav = [
   { kind: 'overview', title: 'Introduction' },
   { kind: 'page', slug: 'prerequisites', title: 'Prerequisites', maxDepth: 0 },
   { kind: 'page', slug: 'setup', title: 'Setup', maxDepth: 0 },
+  { kind: 'page', slug: 'configuration', title: 'Configuration', maxDepth: 2 },
   { kind: 'page', slug: 'deploy', title: 'Deploy', maxDepth: 2 },
   { kind: 'page', slug: 'auth', title: 'Authentication', maxDepth: 0 },
   { kind: 'page', slug: 'llm', title: 'LLM', maxDepth: 2 },

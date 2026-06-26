@@ -15,7 +15,7 @@ Copy the example config and adjust it for your environment:
 cp server.yaml.example server.yaml
 ```
 
-`server.yaml` requires `server`, `db`, and `redis` sections. See `server.yaml.example` at the repository root for Postgres, MySQL, and Firestore options.
+`server.yaml` requires `server`, `db`, and `redis` sections. See [Configuration](./configuration.md) for every option, or `server.yaml.example` at the repository root for a copy-paste starting point.
 
 For local development, start Postgres and Redis with Docker Compose:
 

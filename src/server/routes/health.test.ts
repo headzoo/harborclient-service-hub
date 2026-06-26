@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_LOGGING_CONFIG } from '#/config/loggingConfig.js';
 import { createStubDatabase } from '#/db/stubDatabase.js';
 import { createServer } from '#/server/createServer.js';
 import { createStubThrottleStore } from '#/server/auth/throttle/stubThrottleStore.js';
@@ -30,7 +31,8 @@ describe('GET /health', () => {
         db: { driver: 'postgres' },
         redis: { host: '127.0.0.1', port: 6380 },
         llm: null,
-        plugins: null
+        plugins: null,
+        logging: DEFAULT_LOGGING_CONFIG
       },
       { version: '0.1.0', db: createHealthStubDatabase(), throttleStore: createStubThrottleStore() }
     );

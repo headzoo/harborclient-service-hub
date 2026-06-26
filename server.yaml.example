@@ -2,7 +2,7 @@
 # Copy to server.yaml and adjust for your environment.
 #
 # Required sections: server, db, redis
-# Optional sections: llm, plugins
+# Optional sections: logging, llm, plugins
 #
 # While team-hub start is running, db/redis/llm/plugins reload live via SIGHUP or
 # POST /admin/config/reload. Changes to server.host or server.port require a restart.
@@ -11,6 +11,14 @@
 server:
   port: 8787
   host: 127.0.0.1
+
+# Optional logging. Defaults: level info, console true, no file.
+# Applied at process startup; restart team-hub start after changes.
+#
+# logging:
+#   level: debug
+#   file: /var/log/team-hub.log
+#   console: true
 
 # Database backend. Set driver to postgres, mysql, or firestore.
 #

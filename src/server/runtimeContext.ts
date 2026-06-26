@@ -5,6 +5,7 @@ import { ConfigError, loadServerConfig, type ServerConfig } from '#/config/serve
 import { createDatabase, type IDatabase } from '#/db/index.js';
 import { createThrottleStore } from '#/server/auth/throttle/createThrottleStore.js';
 import type { IThrottleStore } from '#/server/auth/throttle/IThrottleStore.js';
+import { createLogger, type Logger } from '#/server/logging/logger.js';
 
 /**
  * Outcome for a single config section during reload.
@@ -89,6 +90,11 @@ export interface RuntimeContext {
    * Returns the current normalized plugin source configuration.
    */
   getPlugins(): PluginsConfig | null;
+
+  /**
+   * Winston logger configured at process startup from server.yaml.
+   */
+  readonly logger: Logger;
 }
 
 /**
@@ -198,7 +204,8 @@ export function createRuntimeContext(config: ServerConfig, configPath: string): 
     db: createSwappableProxy(state.dbHolder),
     throttleStore: createSwappableProxy(state.throttleHolder),
     getLlm: () => state.llm,
-    getPlugins: () => state.plugins
+    getPlugins: () => state.plugins,
+    logger: createLogger(config.logging)
   };
 
   runtimeContextStates.set(ctx, state);

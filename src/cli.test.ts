@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CommanderError } from 'commander';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_LOGGING_CONFIG } from '#/config/loggingConfig.js';
 
 const { createServerMock, createDatabaseMock, createThrottleStoreMock } = vi.hoisted(() => ({
   createServerMock: vi.fn(),
@@ -293,7 +294,8 @@ ${sampleDbSection}${sampleRedisSection}`);
       },
       redis: sampleRedisConfig,
       llm: null,
-      plugins: null
+      plugins: null,
+      logging: DEFAULT_LOGGING_CONFIG
     });
     expect(createServerMock).toHaveBeenCalledWith(
       expect.objectContaining({

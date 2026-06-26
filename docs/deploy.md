@@ -259,6 +259,7 @@ Team Hub can reload `server.yaml` while the `start` process is running. Reloadab
 | `redis` | Yes | Reconnects when the raw `redis` mapping changes |
 | `llm` | Yes | Applied immediately |
 | `plugins` | Yes | Applied immediately |
+| `logging` | No | Applied at process startup; restart after changes |
 | `server.host` / `server.port` | No | Reported as `restart-required`; restart the process to rebind |
 
 **Triggers:**
@@ -427,4 +428,5 @@ Expected when using bundled Postgres. Switch to Cloud SQL for durable storage.
 - [Setup](./setup.md) — install and run on the host
 - [Authentication](./auth.md) — bearer tokens and Redis throttling
 - [CLI](./cli.md) — users, tokens, collections
-- `server.yaml.example` at the repository root — full configuration reference
+- `server.yaml.example` at the repository root — example config file
+- [Configuration](./configuration.md) — full `server.yaml` reference

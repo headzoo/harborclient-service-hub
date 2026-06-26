@@ -17,6 +17,49 @@ export const sidebar: DefaultTheme.SidebarItem[] =
     "link": "/setup"
   },
   {
+    "text": "Configuration",
+    "link": "/configuration",
+    "items": [
+      {
+        "text": "Sections overview",
+        "link": "/configuration#sections-overview"
+      },
+      {
+        "text": "server",
+        "link": "/configuration#server"
+      },
+      {
+        "text": "db",
+        "link": "/configuration#db"
+      },
+      {
+        "text": "redis",
+        "link": "/configuration#redis"
+      },
+      {
+        "text": "logging",
+        "link": "/configuration#logging"
+      },
+      {
+        "text": "llm",
+        "link": "/configuration#llm"
+      },
+      {
+        "text": "plugins",
+        "link": "/configuration#plugins"
+      },
+      {
+        "text": "Docker environment variables",
+        "link": "/configuration#docker-environment-variables"
+      },
+      {
+        "text": "Related docs",
+        "link": "/configuration#related-docs"
+      }
+    ],
+    "collapsed": false
+  },
+  {
     "text": "Deploy",
     "link": "/deploy",
     "items": [
@@ -245,6 +288,10 @@ export const sidebar: DefaultTheme.SidebarItem[] =
           {
             "text": "GET /admin/llm/models",
             "link": "/endpoints#get-adminllmmodels"
+          },
+          {
+            "text": "POST /admin/config/reload",
+            "link": "/endpoints#post-adminconfigreload"
           }
         ],
         "collapsed": false
@@ -368,6 +415,17 @@ export const sidebar: DefaultTheme.SidebarItem[] =
           {
             "text": "POST /llm/chat/step",
             "link": "/endpoints#post-llmchatstep"
+          }
+        ],
+        "collapsed": false
+      },
+      {
+        "text": "Plugin sources",
+        "link": "/endpoints#plugin-sources",
+        "items": [
+          {
+            "text": "GET /plugins/sources",
+            "link": "/endpoints#get-pluginssources"
           }
         ],
         "collapsed": false
