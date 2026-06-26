@@ -34,8 +34,18 @@ import {
   updateAdminEnvironmentBodySchema,
   updateAdminUserBodySchema
 } from '#/server/routes/schemas/admin.js';
-import { errorResponseSchema, idParamSchema } from '#/server/routes/schemas/common.js';
-import { emptyResponseSchema } from '#/server/routes/schemas/entities.js';
+import {
+  errorResponseSchema,
+  idParamSchema,
+  collectionIdParamSchema
+} from '#/server/routes/schemas/common.js';
+import {
+  emptyResponseSchema,
+  listFoldersResponseSchema,
+  listRequestsResponseSchema,
+  serializeFolder,
+  serializeSavedRequest
+} from '#/server/routes/schemas/entities.js';
 import type { LlmConfig } from '#/config/llmConfig.js';
 import type { ReloadResult } from '#/server/runtimeContext.js';
 
@@ -311,6 +321,88 @@ export async function registerAdminRoutes(
 
   routes.route({
     method: 'GET',
+    url: '/admin/collections/:collectionId/folders',
+    schema: {
+      params: collectionIdParamSchema,
+      response: {
+        200: listFoldersResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema
+      }
+    },
+    /**
+     * Lists folders in a collection for operator inspection.
+     */
+    handler: async (request, reply) => {
+      try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseManagementApi(user))) {
+          return;
+        }
+
+        const collection = await db.findCollectionById(request.params.collectionId);
+        if (!collection) {
+          void reply.code(404).send({ error: 'Collection not found' });
+          return;
+        }
+
+        const folders = await db.listFolders(request.params.collectionId);
+        return reply.send({
+          folders: folders.map((folder) => serializeFolder(folder))
+        });
+      } catch (error) {
+        if (handleDbError(reply, error)) {
+          return;
+        }
+
+        throw error;
+      }
+    }
+  });
+
+  routes.route({
+    method: 'GET',
+    url: '/admin/collections/:collectionId/requests',
+    schema: {
+      params: collectionIdParamSchema,
+      response: {
+        200: listRequestsResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema
+      }
+    },
+    /**
+     * Lists saved requests in a collection for operator inspection.
+     */
+    handler: async (request, reply) => {
+      try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseManagementApi(user))) {
+          return;
+        }
+
+        const collection = await db.findCollectionById(request.params.collectionId);
+        if (!collection) {
+          void reply.code(404).send({ error: 'Collection not found' });
+          return;
+        }
+
+        const requests = await db.listRequests(request.params.collectionId);
+        return reply.send({
+          requests: requests.map((savedRequest) => serializeSavedRequest(savedRequest))
+        });
+      } catch (error) {
+        if (handleDbError(reply, error)) {
+          return;
+        }
+
+        throw error;
+      }
+    }
+  });
+
+  routes.route({
+    method: 'GET',
     url: '/admin/environments',
     schema: {
       response: {
@@ -374,6 +466,45 @@ export async function registerAdminRoutes(
         }
 
         await db.deleteCollection(request.params.id, user.id);
+        return reply.code(204).send(null);
+      } catch (error) {
+        if (handleDbError(reply, error)) {
+          return;
+        }
+
+        throw error;
+      }
+    }
+  });
+
+  routes.route({
+    method: 'DELETE',
+    url: '/admin/requests/:id',
+    schema: {
+      params: idParamSchema,
+      response: {
+        204: emptyResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema
+      }
+    },
+    /**
+     * Deletes a saved request regardless of collection access lists.
+     */
+    handler: async (request, reply) => {
+      try {
+        const user = requireAuthenticatedUser(request);
+        if (denyUnlessAllowed(reply, canUseManagementApi(user))) {
+          return;
+        }
+
+        const existingRequest = await db.findRequestById(request.params.id);
+        if (!existingRequest) {
+          void reply.code(404).send({ error: 'Request not found' });
+          return;
+        }
+
+        await db.deleteRequest(request.params.id, user.id);
         return reply.code(204).send(null);
       } catch (error) {
         if (handleDbError(reply, error)) {

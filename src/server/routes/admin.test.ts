@@ -40,6 +40,45 @@ const sampleEnvironment = {
   deletionLocked: false
 };
 
+const sampleFolder = {
+  id: 'folder-1',
+  collectionId: 'collection-1',
+  name: 'Auth',
+  sortOrder: 0,
+  createdAt: new Date('2026-01-03T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+  ...sampleAttribution
+};
+
+const sampleRequest = {
+  id: 'request-1',
+  collectionId: 'collection-1',
+  name: 'Get health',
+  method: 'GET' as const,
+  url: '/health',
+  headers: [],
+  params: [],
+  auth: { type: 'none' as const, basic: { username: '', password: '' }, bearer: { token: '' } },
+  body: '',
+  bodyType: 'none' as const,
+  preRequestScript: '',
+  postRequestScript: '',
+  comment: '',
+  folderId: null,
+  sortOrder: 0,
+  createdAt: new Date('2026-01-04T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-05T00:00:00.000Z'),
+  ...sampleAttribution
+};
+
+const adminUser = {
+  ...sampleUserRecord,
+  id: 'admin-1',
+  role: 'admin' as const,
+  collectionAccess: [],
+  environmentAccess: []
+};
+
 /**
  * Configures catalog list mocks used by admin user access validation.
  *
@@ -1090,6 +1129,205 @@ describe('GET /admin/collections', () => {
 
     expect(response.statusCode).toBe(403);
     expect(db.listCollections).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+describe('GET /admin/collections/:collectionId/folders', () => {
+  it('returns folders for admin-role tokens', async () => {
+    const db = createStubDatabase();
+    db.findCollectionById.mockResolvedValue(sampleCollection);
+    db.listFolders.mockResolvedValue([sampleFolder]);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/collection-1/folders',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().folders).toEqual([
+      expect.objectContaining({ id: 'folder-1', name: 'Auth', sortOrder: 0 })
+    ]);
+
+    await app.close();
+  });
+
+  it('returns 404 when the collection is unknown', async () => {
+    const db = createStubDatabase();
+    db.findCollectionById.mockResolvedValue(null);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/missing/folders',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(db.listFolders).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns 403 for user-role tokens', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: sampleUserRecord
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/collection-1/folders',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(db.findCollectionById).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+describe('GET /admin/collections/:collectionId/requests', () => {
+  it('returns requests for admin-role tokens', async () => {
+    const db = createStubDatabase();
+    db.findCollectionById.mockResolvedValue(sampleCollection);
+    db.listRequests.mockResolvedValue([sampleRequest]);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/collection-1/requests',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().requests).toEqual([
+      expect.objectContaining({ id: 'request-1', name: 'Get health', method: 'GET' })
+    ]);
+
+    await app.close();
+  });
+
+  it('returns 404 when the collection is unknown', async () => {
+    const db = createStubDatabase();
+    db.findCollectionById.mockResolvedValue(null);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/missing/requests',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(db.listRequests).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns 403 for user-role tokens', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: sampleUserRecord
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/admin/collections/collection-1/requests',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(db.findCollectionById).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+describe('DELETE /admin/requests/:id', () => {
+  it('deletes a saved request for admin-role tokens', async () => {
+    const db = createStubDatabase();
+    db.findRequestById.mockResolvedValue(sampleRequest);
+    db.deleteRequest.mockResolvedValue(undefined);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/admin/requests/request-1',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(db.deleteRequest).toHaveBeenCalledWith('request-1', 'admin-1');
+
+    await app.close();
+  });
+
+  it('returns 404 when the request is unknown', async () => {
+    const db = createStubDatabase();
+    db.findRequestById.mockResolvedValue(null);
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: adminUser
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/admin/requests/missing',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(db.deleteRequest).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns 403 for user-role tokens', async () => {
+    const db = createStubDatabase();
+    const app = await createProtectedTestApp({
+      db,
+      withValidAuth: true,
+      user: sampleUserRecord
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/admin/requests/request-1',
+      headers: authHeader()
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(db.findRequestById).not.toHaveBeenCalled();
 
     await app.close();
   });

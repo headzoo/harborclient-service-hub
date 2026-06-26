@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add admin routes for managing folders and requests. (`8e9d85f`)
 - Enhance request deletion logic and access control. (`d6230dc`)
 - Update NGINX configuration to use dynamic server name. (`b49c61d`)
 - Enhance collection deletion logic and access control. (`15a4c54`)
